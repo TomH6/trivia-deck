@@ -194,3 +194,33 @@ body.tv .mute-btn{top:auto;bottom:16px;right:16px}
 [dir=rtl] body.tv .mute-btn{left:16px;right:auto}
 [dir=rtl] .langs{justify-content:flex-start}
 [dir=rtl] .dir{direction:rtl}
+
+/* ===== card draw overlay (v2: clean animation) ===== */
+.card-ov{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;background:rgba(12,12,28,.78);animation:ovin .22s ease-out both}
+.card-ov::before{content:"";position:absolute;left:50%;top:52%;width:520px;height:520px;margin:-260px 0 0 -260px;border-radius:50%;background:radial-gradient(closest-side,var(--c),transparent);opacity:.35;animation:aura2 2.4s ease-in-out infinite}
+.card-ov.out{animation:ovout .3s ease-in forwards}
+@keyframes ovin{from{opacity:0}}
+@keyframes ovout{to{opacity:0}}
+@keyframes aura2{50%{opacity:.55;transform:scale(1.08)}}
+.ov-caption{position:relative;font-size:20px;font-weight:600;margin-bottom:10px;text-shadow:0 2px 10px rgba(0,0,0,.8)}
+.card-ov .stage{position:relative;margin:0;min-height:0}
+.stage-ph{min-height:330px}
+body.tv .stage-ph{min-height:500px}
+body.tv .ov-caption{font-size:34px}
+body.tv .card-ov::before{width:800px;height:800px;margin:-400px 0 0 -400px}
+/* no glow inside the 3D card itself — it fought the flip */
+.card3d::before{content:none}
+.card3d .inner{will-change:transform}
+.face{-webkit-transform-style:flat;transform-style:flat}
+/* purple: colour-cycling border + glowing oval instead of a filter (filters flatten 3D) */
+.card3d.play.fx-purple .front{animation:none}
+.card3d.play.fx-purple .oval{animation:wildglow 1.4s 1.2s ease-out both}
+@keyframes wildglow{0%{box-shadow:0 0 0 0 #ff5a5f}25%{box-shadow:0 0 0 8px #ffc531}50%{box-shadow:0 0 0 12px #2ecc71}75%{box-shadow:0 0 0 8px #3d8bff}100%{box-shadow:inset 0 -6px 0 rgba(0,0,0,.08),0 6px 14px rgba(0,0,0,.25)}}
+@media (prefers-reduced-motion:reduce){.card-ov,.card-ov::before{animation:none!important}}
+/* v2.1 polish: effects only start after the flip, and are gentler */
+.card3d.play.fx-purple .face{animation:none}
+.card3d.play.fx-purple .front{animation:rainbowborder 1.4s 1.2s linear forwards}
+.card3d.play.fx-purple .oval{animation:wildglow 1.4s 1.2s ease-out forwards}
+.card3d.play.fx-red .front{animation:flashred2 .5s 1.25s ease-out forwards}
+@keyframes flashred2{0%{box-shadow:inset 0 0 0 200px rgba(255,255,255,0)}30%{box-shadow:inset 0 0 0 200px rgba(255,255,255,.16)}100%{box-shadow:inset 0 0 0 200px rgba(255,255,255,0)}}
+.front::after{background:linear-gradient(115deg,transparent 44%,rgba(255,255,255,.42) 50%,transparent 56%)}

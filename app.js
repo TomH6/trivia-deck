@@ -137,7 +137,7 @@ function poolCats(){const m={};for(const q of POOL.qs)m[q.cat]=(m[q.cat]||0)+1;r
 let FB=null,uid=null,skew=0;
 let view="loading",role="player",code=null,s=null,shown=null,isHost=false;
 let unsubState=null,unsubIn=null,tickTimer=null,joinSent=false,presence={};
-let localAns=null,lastFlip=null,seenReacts=new Set(),firstReacts=true,qSeenAt=0,qSeenKey=null,catsCache=null,catsLoading=false;
+let localAns=null,seenReacts=new Set(),firstReacts=true,qSeenAt=0,qSeenKey=null,catsCache=null,catsLoading=false;
 
 const now=()=>Date.now()+skew;
 const pl=id=>s.players.find(p=>p.id===id);
@@ -577,6 +577,21 @@ function burstFrom(el){
     }
   },1180);
 }
+// The drawn card plays in its own layer above the page, so re-renders of the page
+// (reactions, presence, saves) can never restart or cut its animation.
+const OV={key:null,el:null};
+function syncOverlay(){
+  const want=(view==="game"&&s&&s.status==="playing"&&s.phase==="card"&&s.card)?s.turn+":"+s.card.type:null;
+  if(want===OV.key)return;
+  if(OV.el){const el=OV.el;el.classList.add("out");setTimeout(()=>el.remove(),320);OV.el=null;}
+  OV.key=want;
+  if(!want)return;
+  const C=CARDS[s.card.type],cur=curId();
+  const el=document.createElement("div");el.className="card-ov";el.style.setProperty("--c",C.c);
+  el.innerHTML=`<div class="ov-caption">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage">${cardHTML(s.card.type,true)}</div>`;
+  document.body.appendChild(el);OV.el=el;
+  burstFrom(el.querySelector(".card3d"));
+}
 function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(L(C.name))}</span>`;}
 const tbar=()=>`<div class="tbar" id="tbar"><i></i></div>`;
 function optLabel(ph,o){
@@ -592,8 +607,7 @@ function playArea(tv){
   let h="";
   const ph=s.phase,cur=curId();
   if(ph==="card"){
-    const key=s.turn+":"+s.card.type;const anim=lastFlip!==key;lastFlip=key;
-    h+=`<div class="status">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage">${cardHTML(s.card.type,anim)}</div>`;
+    h+=`<div class="status">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage stage-ph"></div>`;
   }else if(ph==="info"){
     h+=`<div class="stage">${cardHTML(s.card.type,false)}</div><div class="result">${esc(s.info)}</div>`;
   }else if(ph==="pick"||ph==="pickcat"||ph==="joker"){
@@ -733,6 +747,7 @@ function renderInner(){
   if(view==="error"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><div class="banner">${L("Couldn't sign in. Check that Anonymous sign-in is enabled in Firebase, then reload.")}</div>`;return;}
   if(view==="loading"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Loading…")}</p>`;return;}
   if(view==="connecting"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Connecting to room {0}…",esc(code))}</p><div class="center"><button class="link" data-act="leave">${L("Cancel")}</button></div>`;return;}
+  if(view!=="game")syncOverlay();
   if(view==="home"){app.innerHTML=homeView();return;}
   if(view==="game"&&s){
     if(role==="screen")app.innerHTML=tvView();
@@ -746,7 +761,7 @@ function renderInner(){
     if(isHost&&s.status==="lobby"&&!catsCache&&!catsLoading){catsLoading=true;loadCats().then(c=>{catsCache=c;render();});}
     if(s.phase==="question"&&s.q){const k=s.turn+":"+s.q.i;if(qSeenKey!==k){qSeenKey=k;qSeenAt=Date.now();}}
     soundsFor(s);
-    const played=document.querySelector(".card3d.play");if(played&&!played.dataset.burst){played.dataset.burst="1";burstFrom(played);}
+    syncOverlay();
     spawnReacts();updateTimer();
   }
 }
