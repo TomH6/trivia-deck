@@ -73,6 +73,6 @@ export const HE={
 "📺 Use this device as the big screen":"📺 שימוש במכשיר הזה כמסך הגדול",
 "Almost there — paste your Firebase config into <b>config.js</b>.":"כמעט שם — הדביקו את הגדרות Firebase בקובץ <b>config.js</b>.",
 "Couldn't sign in. Check that Anonymous sign-in is enabled in Firebase, then reload.":"ההתחברות נכשלה. ודאו שהתחברות אנונימית מופעלת ב-Firebase ורעננו.",
-"Loading…":"טוען…","Connecting to room {0}…":"מתחברים לחדר {0}…","Cancel":"ביטול",
+"Loading…":"טוען…","You're invited to room {0}":"הוזמנת לחדר {0}","Enter your name first":"קודם הזינו את השם שלכם","Change name":"שינוי שם","Save":"שמירה","Connecting to room {0}…":"מתחברים לחדר {0}…","Cancel":"ביטול",
 "Enter the 4-letter room code":"הזינו את קוד החדר בן 4 האותיות","Link copied":"הקישור הועתק","Join my Trivia Deck game! 🃏 {0}":"בואו לשחק איתי ב-Trivia Deck! 🃏 {0}",
 };

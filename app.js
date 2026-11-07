@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=9";
+import { HE } from "./i18n.js?v=12";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -137,7 +137,7 @@ function poolCats(){const m={};for(const q of POOL.qs)m[q.cat]=(m[q.cat]||0)+1;r
 let FB=null,uid=null,skew=0;
 let view="loading",role="player",code=null,s=null,shown=null,isHost=false;
 let unsubState=null,unsubIn=null,tickTimer=null,joinSent=false,presence={};
-let localAns=null,seenReacts=new Set(),firstReacts=true,qSeenAt=0,qSeenKey=null,catsCache=null,catsLoading=false;
+let inviteCode=null,editingName=false,localAns=null,seenReacts=new Set(),firstReacts=true,qSeenAt=0,qSeenKey=null,catsCache=null,catsLoading=false;
 
 const now=()=>Date.now()+skew;
 const pl=id=>s.players.find(p=>p.id===id);
@@ -179,7 +179,8 @@ async function boot(){
       if(/^[A-Z]{4}$/.test(c)){
         const el=document.getElementById("jcode");if(el)el.value=c;
         if(tv)openRoom(c,"screen");
-        else if(ls.get("td_code")===c||ls.get("td_name"))openRoom(c,"player");
+        else if(ls.get("td_code")===c)openRoom(c,"player",true); // rejoining a room you were already in
+        else{inviteCode=c;view="invite";render();}
       }else if(ls.get("td_code"))openRoom(ls.get("td_code"),"player",true);
     }
   });
@@ -200,7 +201,11 @@ function openRoom(c,asRole,quiet){
   try{history.replaceState(null,"","?room="+c+(role==="screen"?"&tv=1":""));}catch(e){}
   view="connecting";render();
   const pRef=FB.ref("rooms/"+c+"/presence/"+uid);
-  set(pRef,role==="screen"?"tv":"p").catch(()=>{});onDisconnect(pRef).remove();
+  // re-announce ourselves every time the connection comes back (phone slept, switched apps, network blip)
+  const unC=onValue(FB.ref(".info/connected"),snap=>{
+    if(snap.val()!==true)return;
+    onDisconnect(pRef).remove().then(()=>set(pRef,role==="screen"?"tv":"p")).catch(()=>{});
+  });
   const unP=onValue(FB.ref("rooms/"+c+"/presence"),snap=>{presence=snap.val()||{};if(view==="game")render();});
   let loaded=false;
   const unS=onValue(FB.ref("rooms/"+c+"/state"),snap=>{
@@ -215,7 +220,7 @@ function openRoom(c,asRole,quiet){
     if(firstLoad&&s.hostId===uid&&role==="player"){becomeHost();return;}
     afterState();
   },e=>{toast(L("Connection problem: {0}",e.message));});
-  unsubState=()=>{unS();unP();remove(pRef).catch(()=>{});};
+  unsubState=()=>{unS();unP();unC();remove(pRef).catch(()=>{});};
   setTimeout(()=>{if(!loaded)toast(L("Still connecting…"));},8000);
 }
 function afterState(){
@@ -530,7 +535,11 @@ function soundsFor(S){
 
 // ---------------- UI ----------------
 function myName(){const el=document.getElementById("pname");const v=((el&&el.value.trim())||ls.get("td_name")||"Player").slice(0,16);ls.set("td_name",v);return v;}
+// the name typed on the screen (or remembered from last time); null if there is none
+function typedName(){const el=document.getElementById("pname");const v=((el?el.value.trim():"")||(el?"":ls.get("td_name")||"")).slice(0,16);
+  if(!v){toast(L("Enter your name first"));if(el)el.focus();return null;}ls.set("td_name",v);return v;}
 function leave(){
+  inviteCode=null;editingName=false;
   stopRoom();s=null;shown=null;code=null;isHost=false;ls.del("td_code");role="player";
   document.body.classList.remove("tv");
   try{history.replaceState(null,"",location.pathname);}catch(e){}
@@ -701,8 +710,9 @@ function lobbyView(){
   let h=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Trivia with Uno-style chaos")}</p>`;
   h+=`<div class="box center"><div class="mute">${L("Room code")}</div><div class="code">${esc(s.code)}</div>
     <div class="share"><button class="wa" data-act="wa">${L("Invite on WhatsApp")}</button><button class="sec" data-act="copy">${L("Copy link")}</button></div></div>`;
-  h+=`<div class="box"><label>${L("Players ({0}/{1})",s.players.length,MAX_PLAYERS)}</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?` <span class="mute small">${L("🏠 host")}</span>`:""}</span><span class="mute">${p.id===uid?L("you"):online(p.id)?"":L("offline")}</span></li>`).join("")}</ul>
+  h+=`<div class="box"><label>${L("Players ({0}/{1})",s.players.length,MAX_PLAYERS)}</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?` <span class="mute small">${L("🏠 host")}</span>`:""}</span><span class="mute">${p.id===uid?`${L("you")} <button class="link pen" data-act="rename" aria-label="${L("Change name")}">✏️</button>`:online(p.id)?"":L("offline")}</span></li>`).join("")}</ul>
   ${!me&&role==="player"?`<div class="status">${L("Joining…")}</div>`:""}</div>`;
+  if(me&&editingName)h+=`<div class="box"><label>${L("Change name")}</label><div class="row"><input id="rname" maxlength="16" value="${esc(me.name)}" enterkeyhint="done"><button data-act="rename-save" style="flex:0 0 90px">${L("Save")}</button></div><button class="link" data-act="rename-cancel">${L("Cancel")}</button></div>`;
   h+=`<div class="box">${catPicker()}`;
   if(isHost){
     h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto (3, or 2 for 5+)"):v}</option>`).join("")}</select></div>
@@ -726,6 +736,13 @@ function rulesBox(){
   <p class="mute small">Questions from the <a href="https://opentdb.com" style="color:inherit">Open Trivia Database</a> (CC BY-SA 4.0).</p></details>`;
 }
 
+function inviteView(){
+  return `<div class="langs"><button class="${lang()==="en"?"on":""}" data-act="lang" data-v="en">English</button><button class="${lang()==="he"?"on":""}" data-act="lang" data-v="he">עברית</button></div>
+  <h1>Trivia <span>Deck</span></h1><p class="sub">${L("You're invited to room {0}",`<b dir="ltr">${esc(inviteCode)}</b>`)}</p>
+  <div class="box"><label>${L("Your name")}</label><input id="pname" maxlength="16" autocomplete="nickname" enterkeyhint="go" placeholder="${L("e.g. Tom")}" value="${esc(ls.get("td_name")||"")}"></div>
+  <div class="box"><button data-act="join">${L("Join")}</button></div>
+  <div class="center"><button class="link" data-act="leave">${L("Cancel")}</button></div>`;
+}
 function homeView(){
   return `<div class="langs"><button class="${lang()==="en"?"on":""}" data-act="lang" data-v="en">English</button><button class="${lang()==="he"?"on":""}" data-act="lang" data-v="he">עברית</button></div>
   <h1>Trivia <span>Deck</span></h1><p class="sub">${L("Trivia with Uno-style chaos. Play with friends on your phones.")}</p>
@@ -749,10 +766,13 @@ function renderInner(){
   if(view==="connecting"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Connecting to room {0}…",esc(code))}</p><div class="center"><button class="link" data-act="leave">${L("Cancel")}</button></div>`;return;}
   if(view!=="game")syncOverlay();
   if(view==="home"){app.innerHTML=homeView();return;}
+  if(view==="invite"){app.innerHTML=inviteView();setTimeout(()=>{const el=document.getElementById("pname");if(el&&!el.value)el.focus();},50);return;}
   if(view==="game"&&s){
+    const ae=document.activeElement,keep=ae&&ae.id&&ae.tagName==="INPUT"?{id:ae.id,v:ae.value,a:ae.selectionStart,b:ae.selectionEnd}:null;
     if(role==="screen")app.innerHTML=tvView();
     else app.innerHTML=s.status==="lobby"?lobbyView():gameView();
     const sl=document.getElementById("slives"),st=document.getElementById("stimer"),sp=document.getElementById("sparty");
+    if(keep){const el=document.getElementById(keep.id);if(el){el.value=keep.v;el.focus();try{el.setSelectionRange(keep.a,keep.b);}catch(e){}}}
     if(sl)sl.onchange=()=>{s.settings.lives=sl.value;save();};
     if(st)st.onchange=()=>{s.settings.timer=Number(st.value);save();};
     const sd=document.getElementById("sdiff");if(sd)sd.onchange=()=>{s.settings.diff=sd.value;save();};
@@ -786,18 +806,29 @@ function updateTimer(){
 }
 setInterval(updateTimer,200);
 
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Enter"||!e.target||e.target.tagName!=="INPUT")return;
+  const act={pname:view==="invite"?"join":null,jcode:"join",rname:"rename-save"}[e.target.id];
+  const b=act&&document.querySelector(`[data-act="${act}"]`);if(b){e.preventDefault();b.click();}
+});
 document.addEventListener("pointerdown",()=>{if(SFX.on)actx();},{passive:true});
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button");if(!t)return;
   const act=t.dataset.act;
   if(act==="lang"){devLang=t.dataset.v;ls.set("td_lang",devLang);render();return;}
-  if(act==="create"){if(!uid){toast(L("Still connecting…"));return;}myName();createRoom();return;}
+  if(act==="create"){if(!uid){toast(L("Still connecting…"));return;}if(!typedName())return;createRoom();return;}
   if(act==="join"||act==="tv"){
-    const c=(document.getElementById("jcode").value||"").trim().toUpperCase();
+    const jc=document.getElementById("jcode");
+    const c=((jc&&jc.value)||inviteCode||"").trim().toUpperCase();
     if(!/^[A-Z]{4}$/.test(c)){toast(L("Enter the 4-letter room code"));return;}
     if(!uid){toast(L("Still connecting…"));return;}
-    myName();openRoom(c,act==="tv"?"screen":"player");return;
+    if(act==="join"&&!typedName())return;
+    inviteCode=null;openRoom(c,act==="tv"?"screen":"player");return;
   }
+  if(act==="rename"){editingName=true;render();const el=document.getElementById("rname");if(el){el.focus();el.select();}return;}
+  if(act==="rename-save"){const el=document.getElementById("rname");const v=(el&&el.value.trim()||"").slice(0,16);
+    if(!v){toast(L("Enter your name first"));return;}ls.set("td_name",v);editingName=false;send("rename",v);render();return;}
+  if(act==="rename-cancel"){editingName=false;render();return;}
   if(act==="leave"){leave();return;}
   if(act==="wa"){window.open("https://wa.me/?text="+encodeURIComponent(L("Join my Trivia Deck game! 🃏 {0}",roomLink())),"_blank");return;}
   if(act==="copy"){try{await navigator.clipboard.writeText(roomLink());toast(L("Link copied"));}catch(err){toast(roomLink());}return;}
