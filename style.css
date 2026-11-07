@@ -274,3 +274,94 @@ body.tv .summary table{font-size:26px}
 body.tv .cardbar{width:340px}
 body.tv .cb-label{font-size:22px}
 body.tv .cb-track{height:12px}
+
+/* =================== UI refresh =================== */
+:root{--bg:#0f1024;--panel:#1b1c38;--panel2:#272850;--ink:#0a0a16;--text:#f6f4ff;--mute:#a9a6cc;--line:rgba(255,255,255,.08)}
+html,body{background:radial-gradient(1200px 600px at 50% -10%,#24205a 0%,var(--bg) 55%) fixed,var(--bg)}
+body{font-family:'Rubik','Fredoka',system-ui,sans-serif}
+h1,.code,.card3d,.winner,.turnbar,.chip,.timer b,.back .logo,button{font-family:'Fredoka','Rubik',system-ui,sans-serif}
+.box{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),var(--panel);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.sub{font-size:16px}
+label{font-weight:500}
+input,select{background:var(--ink);border-color:var(--panel2)}
+
+/* question panel */
+.qcard{background:linear-gradient(180deg,#22234a,#1a1b38);border:1px solid var(--line);border-radius:18px;padding:14px 16px 16px;margin:12px 0 6px;box-shadow:0 10px 28px rgba(0,0,0,.3)}
+.qmeta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.qmeta .tag{margin:0}
+.tag.d-easy{color:#7ff0a8}.tag.d-medium{color:#ffd86b}.tag.d-hard{color:#ff8f93}
+.q{font-size:22px;font-weight:600;line-height:1.35;margin:0;letter-spacing:.1px}
+
+/* answers: white on near-black, always full contrast */
+.opts{gap:10px;margin-top:8px}
+.opt{display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;border:2px solid #2c2d55;border-radius:14px;padding:14px 14px;min-height:60px;font-family:'Rubik',system-ui,sans-serif;font-size:18px;font-weight:500;text-align:start;opacity:1!important;box-shadow:0 3px 0 rgba(0,0,0,.35);transition:transform .08s,border-color .15s,background .15s}
+.opt:disabled{cursor:default;color:#fff}
+.opt .lt{flex:0 0 32px;width:32px;height:32px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:700;font-size:17px;color:#fff;margin:0;background:#444}
+.opt.l0 .lt{background:#e8484e}.opt.l1 .lt{background:#2f7cf6}.opt.l2 .lt{background:#e0a400}.opt.l3 .lt{background:#22b35e}
+.opt .ot{flex:1;line-height:1.3}
+.opt .who{font-size:12px;font-weight:600;color:var(--mute)}
+.opt .mk{font-size:22px;font-weight:700}
+.opt.live:hover{border-color:#5a5ca8;background:#141530}
+.opt.live:active{transform:scale(.98)}
+.opt.mine{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18)}
+.opt.right{background:#0f3b23;border-color:#2ecc71;color:#fff}
+.opt.right .mk,.opt.right .who{color:#7ff0a8}
+.opt.wrong{background:#3d1416;border-color:#ff5a5f;color:#fff}
+.opt.wrong .mk,.opt.wrong .who{color:#ff9a9d}
+.opt.faded{opacity:.55!important}
+
+/* result + status */
+.result{font-size:18px;font-weight:600;padding:12px 14px;border-radius:14px;margin:12px 0;background:var(--panel)}
+.result.good{background:rgba(46,204,113,.14);border:1px solid rgba(46,204,113,.45)}
+.result.bad{background:rgba(255,90,95,.12);border:1px solid rgba(255,90,95,.45)}
+.status{font-size:16px;color:#cfccef}
+
+/* players with avatars */
+.players{gap:10px;padding:8px 2px 10px}
+.pl{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:88px;padding:10px 10px 8px;background:var(--panel);border:1px solid var(--line)}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:700;font-size:17px;color:#fff;background:hsl(var(--h) 70% 52%);box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+.pl.ghost .av{filter:grayscale(1)}
+.pl .nm{font-size:14px}
+.pl .hp{font-size:13px}
+.pl.turn{border:2px solid var(--yellow)}
+
+/* lobby list + buttons */
+.plist li{background:var(--ink);border:1px solid var(--line);padding:11px 14px}
+button.sec{background:var(--panel2);border:1px solid var(--line)}
+.cats button{background:var(--ink);border:1px solid #2c2d55}
+.cats button.on{border-color:var(--blue)}
+.react{background:linear-gradient(transparent,rgba(15,16,36,.95) 40%)}
+.react button{background:rgba(255,255,255,.06);border:1px solid var(--line);backdrop-filter:blur(6px)}
+.turnbar{border-radius:16px}
+
+/* big screen */
+body.tv .qcard{padding:22px 28px}
+body.tv .q{font-size:44px}
+body.tv .opt{font-size:30px;min-height:96px;padding:20px 22px}
+body.tv .opt .lt{flex-basis:52px;width:52px;height:52px;font-size:28px}
+body.tv .result{font-size:28px}
+body.tv .av{width:48px;height:48px;font-size:24px}
+body.tv .side .pl{flex-direction:row;gap:12px;justify-content:flex-start}
+body.tv .side .pl .hp{margin-inline-start:auto}
+
+/* compact question layout */
+.qhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px}
+.qhead .timer{width:54px;height:54px;margin:0;flex:0 0 54px}
+.qhead .timer b{font-size:22px}
+.qcard{margin:8px 0 4px;padding:12px 14px 14px}
+.q{font-size:21px}
+.opts{gap:8px;margin-top:8px}
+.opt{min-height:54px;padding:11px 12px}
+.result{margin:8px 0 2px}
+.turnbar{padding:7px 12px;margin:2px 0 6px;font-size:18px}
+.players{padding:6px 2px 6px}
+.pl{padding:8px 8px 6px;min-width:80px}
+.av{width:30px;height:30px;font-size:15px}
+#app{padding-bottom:110px}
+body.tv .qhead .timer{width:110px;height:110px;flex-basis:110px}
+body.tv .qhead .timer b{font-size:46px}
+
+.row select{font-size:16px;padding:11px 6px;padding-inline-end:2px}
+.share button{font-size:16px}
+.row>div:has(#sdiff){flex:1.5}
+.row>div:has(#stimer),.row>div:has(#slives){flex:1}

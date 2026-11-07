@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=16";
+import { HE } from "./i18n.js?v=19";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -554,6 +554,10 @@ function hearts(p){
   return "❤️".repeat(p.lives)+"🖤".repeat(Math.max(0,(s.maxLives||p.lives)-p.lives))+(p.shields?" 🛡️"+(p.shields>1?p.shields:""):"");
 }
 const online=id=>!!presence[id];
+const HUES=[350,25,45,140,175,205,230,265,290,320];
+function avatar(p){let h=0;for(const ch of p.id)h=(h*31+ch.charCodeAt(0))>>>0;
+  const ini=(p.name||"?").trim().charAt(0).toUpperCase();
+  return `<span class="av" style="--h:${HUES[h%HUES.length]}">${esc(ini)}</span>`;}
 function turnBanner(){
   if(s.status!=="playing")return "";
   const cur=curId();if(!cur)return "";
@@ -563,7 +567,7 @@ function playersBar(){
   const turn=s.status==="playing"?curId():null;
   return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""} ${muteBtn(true)}</span></div>
   <div class="players">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?`<span class="you">${L("you")}</span>`:""}
-  ${p.id===turn?'<span class="turnmark">🎯</span>':""}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
+  ${p.id===turn?'<span class="turnmark">🎯</span>':""}${avatar(p)}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
 }
 const FXC={"var(--red)":"red","var(--blue)":"blue","var(--yellow)":"yellow","var(--green)":"green","var(--purple)":"purple","var(--grey)":"grey"};
 const HEX={red:"#ff5a5f",blue:"#3d8bff",yellow:"#ffc531",green:"#2ecc71",purple:"#a66bff",grey:"#c9c6e6"};
@@ -653,17 +657,21 @@ function playArea(tv){
     const my=s.answers[uid]?s.answers[uid].c:(s.ghostAns[uid]?s.ghostAns[uid].c:myLocal);
     const canAns=!tv&&!rev&&(s.who.includes(uid)||amGhostGuess)&&my==null;
     const who=s.mode==="single"?s.who[0]:null;
-    h+=`<div class="center" style="margin-top:6px">${chip(s.card.type)}${s.item&&s.item.cursed?` <span class="tag">${L("🧿 cursed")}</span>`:""}</div>`;
+    h+=`<div class="qhead"><div>${chip(s.card.type)}${s.item&&s.item.cursed?` <span class="tag">${L("🧿 cursed")}</span>`:""}</div>${!rev?tbar():""}</div>`;
     if(party&&!rev)h+=`<div class="lookup">${L("📺 Look at the big screen")}</div>`;
-    else h+=`<div class="q">${esc(q.text)}<div><span class="tag">${esc(q.cat)}</span><span class="tag">${esc(L(q.diff))}</span></div></div>`;
-    if(!rev)h+=tbar();
+    else h+=`<div class="qcard"><div class="qmeta"><span class="tag">${esc(q.cat)}</span><span class="tag d-${esc(q.diff)}">${esc(L(q.diff))}</span></div><div class="q">${esc(q.text)}</div></div>`;
+    if(rev){const rs=s.result&&s.result.res||{},mine=rs[uid],good=mine?mine==="right":(s.mode==="single"?rs[s.who[0]]==="right":Object.values(rs).some(r=>r==="right"));
+      h+=`<div class="result ${good?"good":"bad"}">${esc(s.result?s.result.text:"")}</div>`;}
     h+=`<div class="opts">${q.opts.map((o,i)=>{
-      let cls="opt";if(rev&&i===q.correct)cls+=" right";else if(rev&&Object.values(s.answers).some(a=>a.c===i))cls+=" wrong";
+      let cls="opt l"+i,mark="";
+      if(rev&&i===q.correct){cls+=" right";mark="✓";}
+      else if(rev&&Object.values(s.answers).some(a=>a.c===i)){cls+=" wrong";mark="✗";}
+      else if(rev)cls+=" faded";
       if(my===i&&!tv)cls+=" mine";
+      if(canAns)cls+=" live";
       const pickers=rev?Object.entries(s.answers).filter(([,a])=>a.c===i).map(([id])=>nm(id)):[];
-      return `<button class="${cls}" data-ans="${i}" ${canAns?"":"disabled"} style="${canAns||rev||tv?"opacity:1":""}"><span><span class="lt">${letters()[i]}</span>${esc(o)}</span><span class="who">${esc(pickers.join(", "))}</span></button>`;}).join("")}</div>`;
-    if(rev)h+=`<div class="result">${esc(s.result?s.result.text:"")}</div>`;
-    else{
+      return `<button class="${cls}" data-ans="${i}" ${canAns?"":"disabled"}><span class="lt">${letters()[i]}</span><span class="ot">${esc(o)}</span><span class="who">${esc(pickers.join(", "))}</span>${mark?`<span class="mk">${mark}</span>`:""}</button>`;}).join("")}</div>`;
+    if(!rev){
       let st;
       if(s.mode==="buzzer")st=L(canAns?"🔔 Buzzer! Fastest right answer wins a life":my!=null?"Locked in — waiting…":"🔔 Buzzer round — everyone answers");
       else if(s.mode==="sudden")st=L(canAns?"💀 Everyone answers — wrong loses a life":my!=null?"Locked in — waiting for the others…":"💀 Sudden Death — everyone answers");
@@ -706,7 +714,7 @@ function tvView(){
   const turn=s.status==="playing"?curId():null;
   h+=`<div class="tvgrid"><div>${turnBanner()}${playArea(true)}</div><div class="side">
     <div class="dir" style="font-size:18px"><span>${s.dir===1?L("Order ➡️"):L("Order ⬅️")}</span><span>${s.safeLeft>0?L("🕊️ safe round"):""}</span></div>
-    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}"><div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div></div>`;
+    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}">${avatar(p)}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div></div>`;
   return h;
 }
 
@@ -733,7 +741,7 @@ function lobbyView(){
   if(me&&editingName)h+=`<div class="box"><label>${L("Change name")}</label><div class="row"><input id="rname" maxlength="16" value="${esc(me.name)}" enterkeyhint="done"><button data-act="rename-save" style="flex:0 0 90px">${L("Save")}</button></div><button class="link" data-act="rename-cancel">${L("Cancel")}</button></div>`;
   h+=`<div class="box">${catPicker()}`;
   if(isHost){
-    h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto (3, or 2 for 5+)"):v}</option>`).join("")}</select></div>
+    h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto"):v}</option>`).join("")}</select></div>
     <div><label>${L("Difficulty")}</label><select id="sdiff">${[["chill","😌 Chill"],["normal","🙂 Normal"],["brainy","🧠 Brainy"]].map(([v,l])=>`<option value="${v}" ${(s.settings.diff||"normal")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
     <div><label>${L("Seconds")}</label><select id="stimer">${[15,20,30].map(v=>`<option ${Number(s.settings.timer)===v?"selected":""}>${v}</option>`).join("")}</select></div></div>
     <div style="margin-top:12px"><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div>

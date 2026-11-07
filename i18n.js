@@ -60,7 +60,7 @@ export const HE={
 "🌍 Everything":"🌍 הכול","Categories":"קטגוריות","(tap to mix — or play 🌍 Everything)":"(הקישו כדי לשלב — או שחקו ב-🌍 הכול)","Loading categories…":"טוען קטגוריות…",
 "Trivia with Uno-style chaos":"טריוויה עם כאוס בסגנון אונו","Room code":"קוד החדר","Invite on WhatsApp":"הזמנה בוואטסאפ","Copy link":"העתקת קישור",
 "Players ({0}/{1})":"שחקנים ({0}/{1})","you":"את/ה","offline":"לא מחובר/ת","Joining…":"מצטרפים…",
-"Lives":"חיים","Auto (3, or 2 for 5+)":"אוטומטי","Difficulty":"רמת קושי","😌 Chill":"😌 רגוע","🙂 Normal":"🙂 רגיל","🧠 Brainy":"🧠 חכמולוגים","Seconds":"שניות",
+"Lives":"חיים","Auto":"אוטו׳","Difficulty":"רמת קושי","😌 Chill":"😌 רגוע","🙂 Normal":"🙂 רגיל","🧠 Brainy":"🧠 חכמולוגים","Seconds":"שניות",
 "Language":"שפה",
 "📺 Party mode — questions show on a big screen, phones are buzzers":"📺 מצב מסיבה — השאלות על מסך גדול, הטלפונים הם באזרים",
 "Open <b>{0}</b> on a TV or laptop, tap “Big screen”, and enter code {1}.":"פתחו את <b>{0}</b> בטלוויזיה או במחשב, הקישו „מסך גדול” והזינו את הקוד {1}.",
