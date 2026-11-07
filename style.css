@@ -262,3 +262,15 @@ body.tv .turnbar{font-size:34px;padding:14px}
 .summary tr.win td{color:var(--yellow)}
 body.tv .summary{max-width:760px;margin:16px auto}
 body.tv .summary table{font-size:26px}
+
+/* reading-time bar under the drawn card */
+.cardbar{position:relative;width:220px;margin:16px auto 0;text-align:center}
+.cb-label{font-size:14px;color:var(--mute);margin-bottom:6px;font-variant-numeric:tabular-nums}
+.cb-track{height:8px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden}
+.cb-track i{display:block;height:100%;width:100%;background:var(--c,var(--yellow));border-radius:8px;transition:width .2s linear}
+.cardbar.low .cb-track i{background:var(--yellow)}
+.card-ov .cb-label{color:#fff;opacity:.85}
+[dir=rtl] .cb-track i{margin-inline-start:auto}
+body.tv .cardbar{width:340px}
+body.tv .cb-label{font-size:22px}
+body.tv .cb-track{height:12px}

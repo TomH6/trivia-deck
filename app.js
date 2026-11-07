@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=15";
+import { HE } from "./i18n.js?v=16";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -605,12 +605,14 @@ function syncOverlay(){
   if(!want)return;
   const C=CARDS[s.card.type],cur=curId();
   const el=document.createElement("div");el.className="card-ov";el.style.setProperty("--c",C.c);
-  el.innerHTML=`<div class="ov-caption">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage">${cardHTML(s.card.type,true)}</div>`;
+  el.innerHTML=`<div class="ov-caption">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage">${cardHTML(s.card.type,true)}</div>${cardbar()}`;
   document.body.appendChild(el);OV.el=el;
   burstFrom(el.querySelector(".card3d"));
 }
 function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(L(C.name))}</span>`;}
 const RING=2*Math.PI*19;
+// reading-time bar under a drawn card (driven by updateTimer, so re-renders never reset it)
+const cardbar=()=>`<div class="cardbar"><div class="cb-label"></div><div class="cb-track"><i></i></div></div>`;
 const tbar=()=>`<div class="timer" id="tbar"><svg viewBox="0 0 44 44" aria-hidden="true"><circle class="trk" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" style="stroke-dasharray:${RING};stroke-dashoffset:0"/></svg><b></b></div>`;
 function optLabel(ph,o){
   if(ph==="pick")return esc(nm(o));
@@ -637,7 +639,7 @@ function playArea(tv){
   if(ph==="card"){
     h+=`<div class="status">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage stage-ph"></div>`;
   }else if(ph==="info"){
-    h+=`<div class="stage">${cardHTML(s.card.type,false)}</div><div class="result">${esc(s.info)}</div>`;
+    h+=`<div class="stage">${cardHTML(s.card.type,false)}</div><div class="result">${esc(s.info)}</div>${cardbar()}`;
   }else if(ph==="pick"||ph==="pickcat"||ph==="joker"){
     const mine=s.chooser===uid&&!tv;
     const what=L(ph==="pick"?"who gets the bomb 💣":ph==="pickcat"?(s.options[0].startsWith("diff:")?"the difficulty 🎯":"a category 🎯"):"a card for the Joker 🃏");
@@ -814,6 +816,14 @@ function spawnReacts(){
 }
 function updateTimer(){
   const V=isHost&&shown?shown:s;
+  if(V&&V.until&&(V.phase==="card"||V.phase==="info")){
+    const total=(V.dur||5)*1000,left=Math.min(total,Math.max(0,V.until-now())),sec=Math.ceil(left/1000);
+    document.querySelectorAll(".cardbar").forEach(cb=>{
+      const i=cb.querySelector("i");if(i)i.style.width=(100*left/total)+"%";
+      const lb=cb.querySelector(".cb-label"),t=L("Next up in {0}",sec);if(lb&&lb.textContent!==t)lb.textContent=t;
+      cb.classList.toggle("low",sec<=2);
+    });
+  }
   const b=document.getElementById("tbar");if(!b||!V||!V.until)return;
   const total=(V.dur||20)*1000,left=Math.min(total,Math.max(0,V.until-now()));
   const sec=Math.ceil(left/1000);
