@@ -184,3 +184,13 @@ body.tv .stage{min-height:500px}
 
 .mute-btn{position:fixed;top:max(10px,env(safe-area-inset-top));right:10px;width:44px;height:44px;padding:0;border-radius:50%;background:var(--panel);font-size:20px;z-index:7}
 body.tv .mute-btn{top:auto;bottom:16px;right:16px}
+/* language toggle + right-to-left */
+.langs{display:flex;justify-content:flex-end;gap:6px;margin:4px 0 -6px}
+.langs button{width:auto;font-size:14px;padding:6px 12px;border-radius:999px;background:var(--panel2);color:var(--text);font-weight:500}
+.langs button.on{background:var(--blue);color:#fff}
+.opt{text-align:start}
+.opt .lt{margin-right:0;margin-inline-end:8px}
+[dir=rtl] .mute-btn{right:auto;left:10px}
+[dir=rtl] body.tv .mute-btn{left:16px;right:auto}
+[dir=rtl] .langs{justify-content:flex-start}
+[dir=rtl] .dir{direction:rtl}

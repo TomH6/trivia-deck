@@ -4,9 +4,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, set, get, push, remove, onValue, onChildAdded, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=4";
-import { BEATLES } from "./packs/beatles.js?v=4";
-import { TOLKIEN } from "./packs/tolkien.js?v=4";
+import { firebaseConfig } from "./config.js?v=8";
+import { BEATLES } from "./packs/beatles.js?v=8";
+import { TOLKIEN } from "./packs/tolkien.js?v=8";
+import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
+import { HE } from "./i18n.js?v=8";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -45,15 +47,27 @@ const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k
 const DIFF_MIX={chill:[.65,.30],normal:[.45,.45],brainy:[.20,.50]}; // [easy, medium] — rest is hard
 const rd=()=>{const m=DIFF_MIX[(typeof s!=="undefined"&&s&&s.settings&&s.settings.diff)||"normal"]||DIFF_MIX.normal;const r=Math.random();return r<m[0]?"easy":r<m[0]+m[1]?"medium":"hard";};
 const arr=v=>Array.isArray(v)?v:(v&&typeof v==="object"?Object.values(v):[]);
+// ---------------- language ----------------
+let devLang=ls.get("td_lang")==="he"?"he":"en";
+const lang=()=>(typeof s!=="undefined"&&s&&s.settings&&s.settings.lang)||devLang;
+const L=(en,...a)=>{let t=(lang()==="he"&&HE[en])||en;a.forEach((v,i)=>{t=t.split("{"+i+"}").join(v);});return t;};
+const letters=()=>lang()==="he"?"אבגד":"ABCD";
 
 // ---------------- questions ----------------
 const packQ=(label,list)=>list.map(q=>({cat:label+": "+q[0],diff:q[1],text:q[2],a:q[3],w:[q[4],q[5],q[6]]}));
 // custom packs: id -> {name shown in the lobby, questions}
 const PACKS={
-  beatles:{name:"🎸 Beatles pack",qs:packQ("Beatles",BEATLES)},
-  tolkien:{name:"💍 Tolkien pack",qs:packQ("Tolkien",TOLKIEN)},
+  beatles:{name:"🎸 Beatles pack",lang:"en",qs:packQ("Beatles",BEATLES)},
+  tolkien:{name:"💍 Tolkien pack",lang:"en",qs:packQ("Tolkien",TOLKIEN)},
+  he_music:{name:"🎤 מוזיקה ישראלית",lang:"he",qs:packQ("מוזיקה ישראלית",HE_MUSIC)},
+  he_tv:{name:"📺 טלוויזיה וקולנוע",lang:"he",qs:packQ("טלוויזיה וקולנוע",HE_TV)},
+  he_geo:{name:"🗺️ ארץ ישראל",lang:"he",qs:packQ("ארץ ישראל",HE_GEO)},
+  he_general:{name:"🧠 ידע כללי",lang:"he",qs:packQ("ידע כללי",HE_GENERAL)},
 };
-const ALL_PACK_Q=Object.values(PACKS).flatMap(p=>p.qs);
+const packIds=()=>Object.keys(PACKS).filter(k=>PACKS[k].lang===lang());
+const ALL_PACK_Q_FOR=()=>packIds().flatMap(k=>PACKS[k].qs.map(q=>({...q,src:k})));
+// what "Everything" means: the whole Open Trivia DB in English, all Hebrew packs in Hebrew
+const defaultSources=()=>lang()==="he"?packIds():["any"];
 const OT={token:null,lastCall:0,cats:null};
 const POOL={qs:[],sources:[],next:0,busy:false,failed:false,seen:new Set()};
 const cleanCat=n=>n.replace(/^(Entertainment|Science): /,"");
@@ -95,10 +109,10 @@ async function fillPool(src){
   POOL.busy=false;
 }
 async function preparePool(sources){
-  POOL.qs=[];POOL.failed=false;POOL.sources=sources.length?sources.slice():["any"];
+  POOL.qs=[];POOL.failed=false;POOL.sources=sources.length?sources.slice():defaultSources();
   // load the first two sources before the game starts, the rest in the background (the API allows one call per 5 s)
   for(let i=0;i<Math.min(2,POOL.sources.length);i++)await fillPool(POOL.sources[i]);
-  if(!POOL.qs.length){addToPool(shuffle(ALL_PACK_Q.slice()));toast("Couldn't reach the trivia database — using the built-in packs");}
+  if(!POOL.qs.length){addToPool(shuffle(ALL_PACK_Q_FOR()));toast(L("Couldn't reach the trivia database — using the built-in packs"));}
   (async()=>{for(let i=2;i<POOL.sources.length;i++)await fillPool(POOL.sources[i]);})();
 }
 function takeQuestion(diff,cat){
@@ -113,7 +127,7 @@ function takeQuestion(diff,cat){
   const d=c.filter(i=>POOL.qs[i].diff===diff);if(d.length)c=d;
   if(!c.length){POOL.seen.clear();const own=POOL.sources.filter(x=>PACKS[x]);
     if(own.length)own.forEach(x=>addToPool(shuffle(PACKS[x].qs.slice()).map(q=>({...q,src:x}))));
-    else addToPool(shuffle(ALL_PACK_Q.slice()).map(q=>({...q,src:"pack"})));
+    else addToPool(shuffle(ALL_PACK_Q_FOR()));
     c=POOL.qs.map((q,i)=>i);}
   return POOL.qs.splice(rand(c),1)[0];
 }
@@ -138,7 +152,7 @@ function normalize(x){
   x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0},p));
   for(const k of ["log","reactions","deck","who","queue","ghostWho"])x[k]=arr(x[k]);
   for(const k of ["answers","cursed","ghostAns"])x[k]=x[k]||{};
-  x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal"},x.settings||{});
+  x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:"en"},x.settings||{});
   x.settings.cats=arr(x.settings.cats);x.settings.catNames=arr(x.settings.catNames);
   if(x.q)x.q.opts=arr(x.q.opts);
   if(x.options)x.options=arr(x.options);
@@ -193,16 +207,16 @@ function openRoom(c,asRole,quiet){
     const firstLoad=!loaded;loaded=true;
     if(!snap.exists()){
       if(isHost)return;
-      if(!quiet)toast("No room with code "+c);
+      if(!quiet)toast(L("No room with code {0}",c));
       leave();return;
     }
     if(isHost)return; // the host renders from its own confirmed writes
     s=normalize(snap.val());
     if(firstLoad&&s.hostId===uid&&role==="player"){becomeHost();return;}
     afterState();
-  },e=>{toast("Connection problem: "+e.message);});
+  },e=>{toast(L("Connection problem: {0}",e.message));});
   unsubState=()=>{unS();unP();remove(pRef).catch(()=>{});};
-  setTimeout(()=>{if(!loaded)toast("Still connecting…");},8000);
+  setTimeout(()=>{if(!loaded)toast(L("Still connecting…"));},8000);
 }
 function afterState(){
   if(!s)return;
@@ -225,7 +239,7 @@ async function save(){
 async function send(kind,v){
   if(isHost){handle({uid,kind,v});return;}
   try{await push(FB.ref("rooms/"+code+"/inputs"),{uid,kind,v:v===undefined?null:v,at:Date.now()});}
-  catch(e){toast("Couldn't send — check your connection");}
+  catch(e){toast(L("Couldn't send — check your connection"));}
 }
 function becomeHost(){
   isHost=true;shown=normalize(JSON.parse(JSON.stringify(s)));
@@ -247,8 +261,9 @@ async function createRoom(){
   }
   openRoom(c,"player");
   isHost=true;shown=null;
-  s=normalize({code:c,hostId:uid,status:"lobby",created:Date.now(),settings:{lives:"auto",timer:20,cats:[],catNames:[],party:false},
-     players:[{id:uid,name:myName(),lives:3,shields:0,ghost:false,gp:0}],log:[myName()+" opened the room"],reactions:[]});
+  s=normalize({code:c,hostId:uid,status:"lobby",created:Date.now(),settings:{lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:devLang},
+     players:[{id:uid,name:myName(),lives:3,shields:0,ghost:false,gp:0}],log:[],reactions:[]});
+  log(L("{0} opened the room",myName()));
   const inRef=FB.ref("rooms/"+c+"/inputs");
   unsubIn=onChildAdded(inRef,snap=>{try{handle(snap.val());}catch(e){console.error(e);}remove(snap.ref).catch(()=>{});});
   tickTimer=setInterval(tick,200);
@@ -265,7 +280,7 @@ function handle(inp){
   if(kind==="join"){
     if(s.status!=="lobby"||P||s.players.length>=MAX_PLAYERS)return;
     const name=String((v&&v.name)||"Player").slice(0,16);
-    s.players.push({id,name,lives:3,shields:0,ghost:false,gp:0});log(name+" joined");save();return;
+    s.players.push({id,name,lives:3,shields:0,ghost:false,gp:0});log(L("{0} joined",name));save();return;
   }
   if(!P)return;
   if(kind==="react"){
@@ -294,7 +309,7 @@ function handle(inp){
   if(kind==="pick"){if(s.chooser===id)choose(v);}
   if(kind==="haunt"){
     const T=pl(v);if(!P.ghost||!(P.haunts>0)||!T||T.ghost)return;
-    P.haunts--;s.cursed[T.id]=true;log("👻 "+P.name+" haunts "+T.name+" — their next question is harder 🧿");save();
+    P.haunts--;s.cursed[T.id]=true;log(L("👻 {0} haunts {1} — their next question is harder 🧿",P.name,T.name));save();
   }
 }
 
@@ -302,13 +317,13 @@ async function hostStart(){
   const n=s.players.length;if(n<2)return;
   s.status="starting";save();
   await preparePool(s.settings.cats);
-  const L=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
-  Object.assign(s,{status:"playing",maxLives:L,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,
-    firstLeft:n,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:["Game on! "+L+" lives each."]});
-  s.players.forEach(p=>Object.assign(p,{lives:L,shields:0,ghost:false,gp:0,haunts:0}));
+  const LV=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
+  Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,
+    firstLeft:n,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
+  s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0}));
   startTurn();
 }
-function backToLobby(){Object.assign(s,{status:"lobby",phase:null,q:null,card:null});log("Back to the lobby");save();}
+function backToLobby(){Object.assign(s,{status:"lobby",phase:null,q:null,card:null});log(L("Back to the lobby"));save();}
 
 function draw(forced){
   if(!s.deck.length)s.deck=buildDeck();
@@ -320,7 +335,7 @@ function startTurn(){
   const t=draw(forced);
   Object.assign(s,{card:{type:t},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,
     phase:"card",dur:3.3,until:now()+3300});
-  log(nm(curId())+" drew "+CARDS[t].ic+" "+CARDS[t].name);
+  log(L("{0} drew {1}",nm(curId()),CARDS[t].ic+" "+L(CARDS[t].name)));
   save();
 }
 function pickPhase(phase,chooser,options,secs){Object.assign(s,{phase,chooser,options,dur:secs,until:now()+secs*1000});save();}
@@ -339,29 +354,29 @@ function applyCard(t){
       if(cats.length>=2)return pickPhase("pickcat",me,sample(cats,3).map(c=>"cat:"+c),15);
       return pickPhase("pickcat",me,["diff:easy","diff:medium","diff:hard"],15);}
     case "bomb":{const o=alive().filter(p=>p.id!==me).map(p=>p.id);
-      if(o.length===1){log(nm(me)+" passes the bomb to "+nm(o[0])+" 💣");return ask({who:o,diff:rd()});}
+      if(o.length===1){log(L("{0} passes the bomb to {1} 💣",nm(me),nm(o[0])));return ask({who:o,diff:rd()});}
       return pickPhase("pick",me,o,15);}
-    case "curse":{const nx=s.players[nextAlive(s.cur)].id;if(nx!==me){s.cursed[nx]=true;log(nm(nx)+" is cursed 🧿");}return ask({who:[me],diff:rd()});}
-    case "skip":Object.assign(s,{phase:"info",info:nm(me)+"'s turn is skipped ⏭️",dur:2.4,until:now()+2400});return save();
-    case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:"Play reverses direction 🔄",dur:2.4,until:now()+2400});return save();
+    case "curse":{const nx=s.players[nextAlive(s.cur)].id;if(nx!==me){s.cursed[nx]=true;log(L("{0} is cursed 🧿",nm(nx)));}return ask({who:[me],diff:rd()});}
+    case "skip":Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:2.4,until:now()+2400});return save();
+    case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:L("Play reverses direction 🔄"),dur:2.4,until:now()+2400});return save();
     case "jump":s.extraSkip=1;return ask({who:[me],diff:rd()});
     case "buzzer":return ask({who:s.players.map(p=>p.id),diff:rd(),mode:"buzzer"});
     case "sudden":return ask({who:alive().map(p=>p.id),diff:rd(),mode:"sudden"});
     case "safe":s.safeLeft=alive().length;return ask({who:[me],diff:rd()});
     case "shield":pl(me).shields++;return ask({who:[me],diff:rd()});
     case "underdog":{const al=alive(),mx=Math.max(...al.map(p=>p.lives)),mn=Math.min(...al.map(p=>p.lives));
-      if(pl(me).lives===mn&&mn<mx)log(nm(me)+" is the underdog 🐶 "+heal(me));else log(nm(me)+" isn't the underdog — no bonus");
+      if(pl(me).lives===mn&&mn<mx)log(L("{0} is the underdog 🐶",nm(me))+" "+heal(me));else log(L("{0} isn't the underdog — no bonus",nm(me)));
       return ask({who:[me],diff:"easy"});}
     case "joker":return pickPhase("joker",me,Object.keys(CARDS).filter(k=>k!=="joker"&&k!=="plain"),20);
   }
 }
 function choose(v){
   const pick=s.options&&s.options.includes(v)?v:rand(s.options);
-  if(s.phase==="pick"){log(nm(s.chooser)+" passes the bomb to "+nm(pick)+" 💣");ask({who:[pick],diff:rd()});}
+  if(s.phase==="pick"){log(L("{0} passes the bomb to {1} 💣",nm(s.chooser),nm(pick)));ask({who:[pick],diff:rd()});}
   else if(s.phase==="pickcat"){
-    const [k,val]=pick.split(/:(.*)/s);log(nm(s.chooser)+" picks "+(k==="cat"?val:val+" difficulty"));
+    const [k,val]=pick.split(/:(.*)/s);log(L("{0} picks {1}",nm(s.chooser),k==="cat"?val:L(val)+" "+L("difficulty")));
     ask(k==="cat"?{who:[curId()],diff:rd(),cat:val}:{who:[curId()],diff:val});
-  }else if(s.phase==="joker"){log(nm(s.chooser)+" plays the Joker as "+CARDS[pick].name);s.card={type:pick,joker:true};s.chooser=null;s.options=null;applyCard(pick);}
+  }else if(s.phase==="joker"){log(L("{0} plays the Joker as {1}",nm(s.chooser),L(CARDS[pick].name)));s.card={type:pick,joker:true};s.chooser=null;s.options=null;applyCard(pick);}
 }
 function ask(item){
   let diff=item.diff;
@@ -375,37 +390,37 @@ function ask(item){
     ghostWho:(item.mode==="buzzer")?[]:s.players.filter(p=>p.ghost).map(p=>p.id),ghostAns:{}});
   save();
 }
-function ghostScore(id){const p=pl(id);p.gp++;if(p.gp%3===0){p.haunts=(p.haunts||0)+1;return " (+1 haunt 🧿)";}return "";}
+function ghostScore(id){const p=pl(id);p.gp++;if(p.gp%3===0){p.haunts=(p.haunts||0)+1;return " "+L("(+1 haunt 🧿)");}return "";}
 function lose(id,n){
-  const p=pl(id);if(s.safeLeft>0)return "(Safe Round — no damage 🕊️)";
+  const p=pl(id);if(s.safeLeft>0)return L("(Safe Round — no damage 🕊️)");
   const out=[];
-  for(let k=0;k<n&&p.lives>0;k++){if(p.shields>0){p.shields--;out.push("🛡️ blocked");}else{p.lives--;out.push("−1 ❤️");}}
-  if(p.lives<=0&&!p.ghost){p.ghost=true;out.push("— OUT 👻");}
+  for(let k=0;k<n&&p.lives>0;k++){if(p.shields>0){p.shields--;out.push(L("🛡️ blocked"));}else{p.lives--;out.push(L("−1 ❤️"));}}
+  if(p.lives<=0&&!p.ghost){p.ghost=true;out.push(L("— OUT 👻"));}
   return out.join(" ");
 }
-function heal(id){const p=pl(id);if(p.ghost)return "";if(p.lives<s.maxLives){p.lives++;return "+1 ❤️";}return "(already full)";}
+function heal(id){const p=pl(id);if(p.ghost)return "";if(p.lives<s.maxLives){p.lives++;return "+1 ❤️";}return L("(already full)");}
 function resolve(){
   const q=s.q,it=s.item,res={};let text="";
   for(const id of s.who){const a=s.answers[id];res[id]=a?(a.c===q.correct?"right":"wrong"):"timeout";}
   if(s.mode==="single"){
     const id=s.who[0];const ok=res[id]==="right";s.lastOk=ok;
-    if(ok){text=nm(id)+" got it ✅";if(it.reward==="heal")text+=" "+heal(id);}
-    else text=nm(id)+(res[id]==="timeout"?" ran out of time ⏰ ":" got it wrong ❌ ")+lose(id,it.lose||1);
+    if(ok){text=L("{0} got it ✅",nm(id));if(it.reward==="heal")text+=" "+heal(id);}
+    else text=(res[id]==="timeout"?L("{0} ran out of time ⏰",nm(id)):L("{0} got it wrong ❌",nm(id)))+" "+lose(id,it.lose||1);
   }else if(s.mode==="buzzer"){
     const rights=Object.entries(s.answers).filter(([,a])=>a.c===q.correct).sort((a,b)=>a[1].t-b[1].t);
     const first=rights.find(([id])=>!pl(id).ghost);
     const g=rights.filter(([id])=>pl(id).ghost).map(([id])=>nm(id)+ghostScore(id));
-    text=first?nm(first[0])+" was fastest 🔔 "+heal(first[0]):"Nobody got it 🤷";
-    if(g.length)text+=" · 👻 point for "+g.join(", ");
+    text=first?L("{0} was fastest 🔔",nm(first[0]))+" "+heal(first[0]):L("Nobody got it 🤷");
+    if(g.length)text+=" · "+L("👻 point for {0}",g.join(", "));
   }else{
     const before=JSON.parse(JSON.stringify(s.players));
     const losers=s.who.filter(id=>res[id]!=="right");
     const parts=losers.map(id=>nm(id)+" "+lose(id,1));
-    if(alive().length===0){s.players=before;text="Everyone would be out — you all survive! 😮‍💨";}
-    else text=losers.length?parts.join(" · "):"Everyone survived 😮‍💨";
+    if(alive().length===0){s.players=before;text=L("Everyone would be out — you all survive! 😮‍💨");}
+    else text=losers.length?parts.join(" · "):L("Everyone survived 😮‍💨");
   }
   const gr=Object.entries(s.ghostAns).filter(([,a])=>a.c===q.correct).map(([id])=>nm(id)+ghostScore(id));
-  if(gr.length)text+=" · 👻 "+gr.join(", ")+" guessed right";
+  if(gr.length)text+=" · "+L("👻 {0} guessed right",gr.join(", "));
   s.result={res,text};log(text);
   Object.assign(s,{phase:"reveal",dur:3.5,until:now()+3500});save();
 }
@@ -415,7 +430,7 @@ function afterReveal(){
     s.queue=[];s.chainFail=true;
   }
   if(s.chain==="allin"&&s.lastOk&&!s.chainFail){
-    const t=nm(curId())+" survived All In! 🎰 "+heal(curId());log(t);
+    const t=L("{0} survived All In! 🎰",nm(curId()))+" "+heal(curId());log(t);
     s.chain=null;Object.assign(s,{phase:"info",info:t,dur:2.5,until:now()+2500});save();return;
   }
   endTurn();
@@ -423,7 +438,7 @@ function afterReveal(){
 function nextAlive(c){const n=s.players.length;for(let k=1;k<=n;k++){const j=((c+s.dir*k)%n+n)%n;if(!s.players[j].ghost)return j;}return c;}
 function endTurn(){
   const al=alive();
-  if(al.length<=1){s.status="over";s.phase="over";s.winner=al[0]?al[0].id:null;log("🏆 "+(al[0]?al[0].name:"Nobody")+" wins!");save();return;}
+  if(al.length<=1){s.status="over";s.phase="over";s.winner=al[0]?al[0].id:null;log(L("🏆 {0} wins!",al[0]?al[0].name:L("Nobody")));save();return;}
   if(s.safeLeft>0)s.safeLeft--;
   const steps=1+(s.extraSkip||0);s.extraSkip=0;
   let c=s.cur;for(let k=0;k<steps;k++)c=nextAlive(c);
@@ -529,8 +544,8 @@ function hearts(p){
 const online=id=>!!presence[id];
 function playersBar(){
   const turn=s.status==="playing"?curId():null;
-  return `<div class="dir"><span>Room ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?"Order ➡️":"Order ⬅️ (reversed)")+(s.safeLeft>0?" · 🕊️ safe":""):""}</span></div>
-  <div class="players">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?'<span class="you">you</span>':""}
+  return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""}</span></div>
+  <div class="players">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?`<span class="you">${L("you")}</span>`:""}
   <div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
 }
 const FXC={"var(--red)":"red","var(--blue)":"blue","var(--yellow)":"yellow","var(--green)":"green","var(--purple)":"purple","var(--grey)":"grey"};
@@ -539,7 +554,7 @@ function cardHTML(t,anim){
   const C=CARDS[t],fx=FXC[C.c]||"grey";
   return `<div class="card3d ${anim?"play":"still"} fx-${fx} k-${t}" data-fx="${fx}" data-ic="${C.ic}" style="--c:${C.c}"><div class="inner">
     <div class="face front"><span class="crn tl">${C.ic}</span><span class="crn br">${C.ic}</span>
-      <div class="oval"><span class="big">${C.ic}</span></div><div class="cn">${esc(C.name)}</div><div class="cd">${esc(C.d)}</div></div>
+      <div class="oval"><span class="big">${C.ic}</span></div><div class="cn">${esc(L(C.name))}</div><div class="cd">${esc(L(C.d))}</div></div>
     <div class="face back"><div class="logo">TRIVIA<span>DECK</span></div></div></div></div>`;
 }
 // confetti-style burst from the card once it has flipped
@@ -562,12 +577,12 @@ function burstFrom(el){
     }
   },1180);
 }
-function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(C.name)}</span>`;}
+function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(L(C.name))}</span>`;}
 const tbar=()=>`<div class="tbar" id="tbar"><i></i></div>`;
 function optLabel(ph,o){
   if(ph==="pick")return esc(nm(o));
-  if(ph==="joker")return CARDS[o].ic+" "+esc(CARDS[o].name);
-  const [k,v]=o.split(/:(.*)/s);return k==="cat"?esc(v):esc(v[0].toUpperCase()+v.slice(1));
+  if(ph==="joker")return CARDS[o].ic+" "+esc(L(CARDS[o].name));
+  const [k,v]=o.split(/:(.*)/s);return k==="cat"?esc(v):esc(L(v[0].toUpperCase()+v.slice(1)));
 }
 
 // main play area, shared by phones and the big screen
@@ -578,14 +593,14 @@ function playArea(tv){
   const ph=s.phase,cur=curId();
   if(ph==="card"){
     const key=s.turn+":"+s.card.type;const anim=lastFlip!==key;lastFlip=key;
-    h+=`<div class="status">${cur===uid?"Your turn — you drew…":esc(nm(cur))+" drew…"}</div><div class="stage">${cardHTML(s.card.type,anim)}</div>`;
+    h+=`<div class="status">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage">${cardHTML(s.card.type,anim)}</div>`;
   }else if(ph==="info"){
     h+=`<div class="stage">${cardHTML(s.card.type,false)}</div><div class="result">${esc(s.info)}</div>`;
   }else if(ph==="pick"||ph==="pickcat"||ph==="joker"){
     const mine=s.chooser===uid&&!tv;
-    const what=ph==="pick"?"who gets the bomb 💣":ph==="pickcat"?(s.options[0].startsWith("diff:")?"the difficulty 🎯":"a category 🎯"):"a card for the Joker 🃏";
+    const what=L(ph==="pick"?"who gets the bomb 💣":ph==="pickcat"?(s.options[0].startsWith("diff:")?"the difficulty 🎯":"a category 🎯"):"a card for the Joker 🃏");
     h+=`<div class="center" style="margin-top:8px">${chip(ph==="joker"?"joker":s.card.type)}</div>`;
-    h+=`<div class="status">${mine?"Choose "+what:esc(nm(s.chooser))+" is choosing "+what}</div>${tbar()}`;
+    h+=`<div class="status">${mine?L("Choose {0}",what):L("{0} is choosing {1}",esc(nm(s.chooser)),what)}</div>${tbar()}`;
     if(mine)h+=`<div class="picks">${s.options.map(o=>`<button class="sec" data-pick="${esc(o)}">${optLabel(ph,o)}</button>`).join("")}</div>`;
   }else if((ph==="question"||ph==="reveal")&&s.q){
     const q=s.q,rev=ph==="reveal";
@@ -594,31 +609,31 @@ function playArea(tv){
     const my=s.answers[uid]?s.answers[uid].c:(s.ghostAns[uid]?s.ghostAns[uid].c:myLocal);
     const canAns=!tv&&!rev&&(s.who.includes(uid)||amGhostGuess)&&my==null;
     const who=s.mode==="single"?s.who[0]:null;
-    h+=`<div class="center" style="margin-top:6px">${chip(s.card.type)}${s.item&&s.item.cursed?' <span class="tag">🧿 cursed</span>':""}</div>`;
-    if(party&&!rev)h+=`<div class="lookup">📺 Look at the big screen</div>`;
-    else h+=`<div class="q">${esc(q.text)}<div><span class="tag">${esc(q.cat)}</span><span class="tag">${esc(q.diff)}</span></div></div>`;
+    h+=`<div class="center" style="margin-top:6px">${chip(s.card.type)}${s.item&&s.item.cursed?` <span class="tag">${L("🧿 cursed")}</span>`:""}</div>`;
+    if(party&&!rev)h+=`<div class="lookup">${L("📺 Look at the big screen")}</div>`;
+    else h+=`<div class="q">${esc(q.text)}<div><span class="tag">${esc(q.cat)}</span><span class="tag">${esc(L(q.diff))}</span></div></div>`;
     if(!rev)h+=tbar();
     h+=`<div class="opts">${q.opts.map((o,i)=>{
       let cls="opt";if(rev&&i===q.correct)cls+=" right";else if(rev&&Object.values(s.answers).some(a=>a.c===i))cls+=" wrong";
       if(my===i&&!tv)cls+=" mine";
       const pickers=rev?Object.entries(s.answers).filter(([,a])=>a.c===i).map(([id])=>nm(id)):[];
-      return `<button class="${cls}" data-ans="${i}" ${canAns?"":"disabled"} style="${canAns||rev||tv?"opacity:1":""}"><span><span class="lt">${LETTERS[i]}</span>${esc(o)}</span><span class="who">${esc(pickers.join(", "))}</span></button>`;}).join("")}</div>`;
+      return `<button class="${cls}" data-ans="${i}" ${canAns?"":"disabled"} style="${canAns||rev||tv?"opacity:1":""}"><span><span class="lt">${letters()[i]}</span>${esc(o)}</span><span class="who">${esc(pickers.join(", "))}</span></button>`;}).join("")}</div>`;
     if(rev)h+=`<div class="result">${esc(s.result?s.result.text:"")}</div>`;
     else{
       let st;
-      if(s.mode==="buzzer")st=canAns?"🔔 Buzzer! Fastest right answer wins a life":my!=null?"Locked in — waiting…":"🔔 Buzzer round — everyone answers";
-      else if(s.mode==="sudden")st=canAns?"💀 Everyone answers — wrong loses a life":my!=null?"Locked in — waiting for the others…":"💀 Sudden Death — everyone answers";
-      else st=who===uid?(my!=null?"Locked in…":"Your question!"):esc(nm(who))+" is answering…";
-      if(amGhostGuess)st=my!=null?"👻 Guess locked in":"👻 Ghost guess — every 3 right answers earns a haunt";
+      if(s.mode==="buzzer")st=L(canAns?"🔔 Buzzer! Fastest right answer wins a life":my!=null?"Locked in — waiting…":"🔔 Buzzer round — everyone answers");
+      else if(s.mode==="sudden")st=L(canAns?"💀 Everyone answers — wrong loses a life":my!=null?"Locked in — waiting for the others…":"💀 Sudden Death — everyone answers");
+      else st=who===uid?L(my!=null?"Locked in…":"Your question!"):L("{0} is answering…",esc(nm(who)));
+      if(amGhostGuess)st=L(my!=null?"👻 Guess locked in":"👻 Ghost guess — every 3 right answers earns a haunt");
       h+=`<div class="status">${st}</div>`;
     }
   }else if(s.status==="over"){
-    h+=`<div class="winner">🏆 ${esc(s.winner?nm(s.winner):"Nobody")} wins!</div>`;
+    h+=`<div class="winner">${L("🏆 {0} wins!",esc(s.winner?nm(s.winner):L("Nobody")))}</div>`;
     const g=s.players.filter(p=>p.gp>0);
-    if(g.length)h+=`<div class="center mute">Ghost points: ${g.map(p=>esc(p.name)+" "+p.gp).join(" · ")}</div>`;
-    if(!tv)h+=isHost?`<div class="box"><button data-act="again">Play again</button></div>`:`<div class="status">Waiting for the host to start a new game…</div>`;
+    if(g.length)h+=`<div class="center mute">${L("Ghost points: {0}",g.map(p=>esc(p.name)+" "+p.gp).join(" · "))}</div>`;
+    if(!tv)h+=isHost?`<div class="box"><button data-act="again">${L("Play again")}</button></div>`:`<div class="status">${L("Waiting for the host to start a new game…")}</div>`;
   }else if(s.status==="starting"){
-    h+=`<div class="status" style="margin-top:40px">🃏 Shuffling the deck and fetching questions…</div>`;
+    h+=`<div class="status" style="margin-top:40px">${L("🃏 Shuffling the deck and fetching questions…")}</div>`;
   }
   return h;
 }
@@ -627,28 +642,28 @@ function gameView(){
   const me=pl(uid);
   let h=playersBar();
   if(me&&me.ghost&&s.status==="playing"){
-    h+=`<div class="banner info">You're a ghost now 👻 Keep guessing every question — each 3 right answers earns a <b>haunt</b>: curse a living player so their next question is harder. Ghost points: <b>${me.gp}</b></div>`;
-    if(me.haunts>0)h+=`<div class="box"><label>🧿 You have ${me.haunts} haunt${me.haunts>1?"s":""} — who do you curse?</label><div class="picks">${alive().map(p=>`<button class="sec" data-haunt="${esc(p.id)}">${esc(p.name)}</button>`).join("")}</div></div>`;
+    h+=`<div class="banner info">${L("You're a ghost now 👻 Keep guessing every question — each 3 right answers earns a <b>haunt</b>: curse a living player so their next question is harder. Ghost points: <b>{0}</b>",me.gp)}</div>`;
+    if(me.haunts>0)h+=`<div class="box"><label>${L(me.haunts>1?"🧿 You have {0} haunts — who do you curse?":"🧿 You have {0} haunt — who do you curse?",me.haunts)}</label><div class="picks">${alive().map(p=>`<button class="sec" data-haunt="${esc(p.id)}">${esc(p.name)}</button>`).join("")}</div></div>`;
   }
-  if(!me&&s.status!=="lobby")h+=`<div class="banner info">This game already started — you're watching. You can join the next one.</div>`;
+  if(!me&&s.status!=="lobby")h+=`<div class="banner info">${L("This game already started — you're watching. You can join the next one.")}</div>`;
   h+=playArea(false);
   h+=`<div class="log">${(s.log||[]).slice(-4).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`;
-  h+=`<div class="center"><button class="link" data-act="leave">Leave room</button></div>`;
+  h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
   h+=muteBtn();
   if(me)h+=`<div class="react">${EMOJI.map(e=>`<button data-react="${e}">${e}</button>`).join("")}</div>`;
   return h;
 }
 
-const muteBtn=()=>`<button class="mute-btn" data-act="mute" aria-label="${SFX.on?"Mute sounds":"Turn sounds on"}">${SFX.on?"🔊":"🔇"}</button>`;
+const muteBtn=()=>`<button class="mute-btn" data-act="mute" aria-label="${L(SFX.on?"Mute sounds":"Turn sounds on")}">${SFX.on?"🔊":"🔇"}</button>`;
 function tvView(){
-  let h=muteBtn()+`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">Join at ${esc(location.host+location.pathname)}<b>${esc(s.code)}</b></div></div>`;
+  let h=muteBtn()+`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">${L("Join at {0}",esc(location.host+location.pathname))}<b>${esc(s.code)}</b></div></div>`;
   if(s.status==="lobby"){
-    h+=`<div class="box center"><div class="q">Scan the room code on your phone to join</div><ul class="plist" style="max-width:520px;margin:0 auto;font-size:26px">${s.players.map(p=>`<li><span>${esc(p.name)}</span><span>${p.id===s.hostId?"🏠 host":""}</span></li>`).join("")}</ul><div class="status">Waiting for the host to start…</div></div>`;
+    h+=`<div class="box center"><div class="q">${L("Enter the room code on your phone to join")}</div><ul class="plist" style="max-width:520px;margin:0 auto;font-size:26px">${s.players.map(p=>`<li><span>${esc(p.name)}</span><span>${p.id===s.hostId?L("🏠 host"):""}</span></li>`).join("")}</ul><div class="status">${L("Waiting for the host to start…")}</div></div>`;
     return h;
   }
   const turn=s.status==="playing"?curId():null;
   h+=`<div class="tvgrid"><div>${playArea(true)}</div><div class="side">
-    <div class="dir" style="font-size:18px"><span>${s.dir===1?"Order ➡️":"Order ⬅️"}</span><span>${s.safeLeft>0?"🕊️ safe round":""}</span></div>
+    <div class="dir" style="font-size:18px"><span>${s.dir===1?L("Order ➡️"):L("Order ⬅️")}</span><span>${s.safeLeft>0?L("🕊️ safe round"):""}</span></div>
     ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}"><div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}
     <div class="log">${(s.log||[]).slice(-5).map(l=>`<div>${esc(l)}</div>`).join("")}</div></div></div>`;
   return h;
@@ -657,51 +672,53 @@ function tvView(){
 function catPicker(){
   const sel=s.settings.cats;
   if(!isHost){
-    const names=s.settings.catNames.length?s.settings.catNames:["🌍 Everything"];
-    return `<label>Categories</label><div class="cats ro">${names.map(n=>`<button class="on">${esc(n)}</button>`).join("")}</div>`;
+    const names=s.settings.catNames.length?s.settings.catNames:[L("🌍 Everything")];
+    return `<label>${L("Categories")}</label><div class="cats ro">${names.map(n=>`<button class="on">${esc(n)}</button>`).join("")}</div>`;
   }
-  const cats=catsCache||[];
-  const chips=[{id:"any",name:"🌍 Everything"},...Object.entries(PACKS).map(([id,p])=>({id,name:p.name})),...cats];
-  return `<label>Categories <span class="small">(tap to mix — or play 🌍 Everything)</span></label><div class="cats">${chips.map(c=>{
+  const he=lang()==="he",cats=he?[]:(catsCache||[]);
+  const chips=[{id:"any",name:L("🌍 Everything")},...packIds().map(id=>({id,name:PACKS[id].name})),...cats];
+  return `<label>${L("Categories")} <span class="small">${L("(tap to mix — or play 🌍 Everything)")}</span></label><div class="cats">${chips.map(c=>{
     const on=c.id==="any"?!sel.length:sel.includes(c.id);
-    return `<button class="${on?"on":""}" data-cat="${esc(c.id)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`;}).join("")}${cats.length?"":'<span class="mute small">Loading categories…</span>'}</div>`;
+    return `<button class="${on?"on":""}" data-cat="${esc(c.id)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`;}).join("")}${cats.length||he?"":`<span class="mute small">${L("Loading categories…")}</span>`}</div>`;
 }
 
 function lobbyView(){
   const me=pl(uid);
-  let h=`<h1>Trivia <span>Deck</span></h1><p class="sub">Trivia with Uno-style chaos</p>`;
-  h+=`<div class="box center"><div class="mute">Room code</div><div class="code">${esc(s.code)}</div>
-    <div class="share"><button class="wa" data-act="wa">Invite on WhatsApp</button><button class="sec" data-act="copy">Copy link</button></div></div>`;
-  h+=`<div class="box"><label>Players (${s.players.length}/${MAX_PLAYERS})</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?' <span class="mute small">🏠 host</span>':""}</span><span class="mute">${p.id===uid?"you":online(p.id)?"":"offline"}</span></li>`).join("")}</ul>
-  ${!me&&role==="player"?'<div class="status">Joining…</div>':""}</div>`;
+  let h=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Trivia with Uno-style chaos")}</p>`;
+  h+=`<div class="box center"><div class="mute">${L("Room code")}</div><div class="code">${esc(s.code)}</div>
+    <div class="share"><button class="wa" data-act="wa">${L("Invite on WhatsApp")}</button><button class="sec" data-act="copy">${L("Copy link")}</button></div></div>`;
+  h+=`<div class="box"><label>${L("Players ({0}/{1})",s.players.length,MAX_PLAYERS)}</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?` <span class="mute small">${L("🏠 host")}</span>`:""}</span><span class="mute">${p.id===uid?L("you"):online(p.id)?"":L("offline")}</span></li>`).join("")}</ul>
+  ${!me&&role==="player"?`<div class="status">${L("Joining…")}</div>`:""}</div>`;
   h+=`<div class="box">${catPicker()}`;
   if(isHost){
-    h+=`<div class="row" style="margin-top:14px"><div><label>Lives</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?"Auto (3, or 2 for 5+)":v}</option>`).join("")}</select></div>
-    <div><label>Difficulty</label><select id="sdiff">${[["chill","😌 Chill"],["normal","🙂 Normal"],["brainy","🧠 Brainy"]].map(([v,l])=>`<option value="${v}" ${(s.settings.diff||"normal")===v?"selected":""}>${l}</option>`).join("")}</select></div>
-    <div><label>Seconds</label><select id="stimer">${[15,20,30].map(v=>`<option ${Number(s.settings.timer)===v?"selected":""}>${v}</option>`).join("")}</select></div></div>
-    <label class="toggle"><span>📺 Party mode — questions show on a big screen, phones are buzzers</span><input type="checkbox" id="sparty" ${s.settings.party?"checked":""}></label>
-    ${s.settings.party?`<p class="mute small">Open <b>${esc(location.host+location.pathname)}</b> on a TV or laptop, tap “Big screen”, and enter code ${esc(s.code)}.</p>`:""}
-    </div><div class="box"><button data-act="start" ${s.players.length<2?"disabled":""}>${s.players.length<2?"Waiting for friends…":"Start game"}</button></div>`;
-  }else h+=`${s.settings.party?'<p class="mute small">📺 Party mode is on — questions will show on the big screen.</p>':""}</div><div class="status">Waiting for the host to start…</div>`;
+    h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto (3, or 2 for 5+)"):v}</option>`).join("")}</select></div>
+    <div><label>${L("Difficulty")}</label><select id="sdiff">${[["chill","😌 Chill"],["normal","🙂 Normal"],["brainy","🧠 Brainy"]].map(([v,l])=>`<option value="${v}" ${(s.settings.diff||"normal")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
+    <div><label>${L("Seconds")}</label><select id="stimer">${[15,20,30].map(v=>`<option ${Number(s.settings.timer)===v?"selected":""}>${v}</option>`).join("")}</select></div></div>
+    <div style="margin-top:12px"><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div>
+    <label class="toggle"><span>${L("📺 Party mode — questions show on a big screen, phones are buzzers")}</span><input type="checkbox" id="sparty" ${s.settings.party?"checked":""}></label>
+    ${s.settings.party?`<p class="mute small">${L("Open <b>{0}</b> on a TV or laptop, tap “Big screen”, and enter code {1}.",esc(location.host+location.pathname),esc(s.code))}</p>`:""}
+    </div><div class="box"><button data-act="start" ${s.players.length<2?"disabled":""}>${L(s.players.length<2?"Waiting for friends…":"Start game")}</button></div>`;
+  }else h+=`${s.settings.party?`<p class="mute small">${L("📺 Party mode is on — questions will show on the big screen.")}</p>`:""}</div><div class="status">${L("Waiting for the host to start…")}</div>`;
   h+=rulesBox();
-  h+=`<div class="center"><button class="link" data-act="leave">Leave room</button></div>`;
+  h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
   h+=muteBtn();
   return h;
 }
 
 function rulesBox(){
-  return `<details class="box rules"><summary>How to play & the cards</summary>
-  <p class="mute small">Before every turn a card is drawn. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins. The first round is all action cards.</p>
-  <table>${Object.values(CARDS).map(c=>`<tr><td>${c.ic}</td><td><b>${esc(c.name)}</b> <span class="mute">×${c.n}</span><br><span class="mute">${esc(c.d)}</span></td></tr>`).join("")}</table>
+  return `<details class="box rules"><summary>${L("How to play & the cards")}</summary>
+  <p class="mute small">${L("Before every turn a card is drawn. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins. The first round is all action cards.")}</p>
+  <table>${Object.values(CARDS).map(c=>`<tr><td>${c.ic}</td><td><b>${esc(L(c.name))}</b> <span class="mute">×${c.n}</span><br><span class="mute">${esc(L(c.d))}</span></td></tr>`).join("")}</table>
   <p class="mute small">Questions from the <a href="https://opentdb.com" style="color:inherit">Open Trivia Database</a> (CC BY-SA 4.0).</p></details>`;
 }
 
 function homeView(){
-  return `<h1>Trivia <span>Deck</span></h1><p class="sub">Trivia with Uno-style chaos. Play with friends on your phones.</p>
-  <div class="box"><label>Your name</label><input id="pname" maxlength="16" placeholder="e.g. Tom" value="${esc(ls.get("td_name")||"")}"></div>
-  <div class="box"><button data-act="create">Create a room</button></div>
-  <div class="box"><label>Join with a code</label><div class="row"><input id="jcode" maxlength="4" placeholder="ABCD" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px"><button class="sec" data-act="join" style="flex:0 0 100px">Join</button></div>
-  <button class="link" data-act="tv" style="margin-top:8px">📺 Use this device as the big screen</button></div>
+  return `<div class="langs"><button class="${lang()==="en"?"on":""}" data-act="lang" data-v="en">English</button><button class="${lang()==="he"?"on":""}" data-act="lang" data-v="he">עברית</button></div>
+  <h1>Trivia <span>Deck</span></h1><p class="sub">${L("Trivia with Uno-style chaos. Play with friends on your phones.")}</p>
+  <div class="box"><label>${L("Your name")}</label><input id="pname" maxlength="16" placeholder="${L("e.g. Tom")}" value="${esc(ls.get("td_name")||"")}"></div>
+  <div class="box"><button data-act="create">${L("Create a room")}</button></div>
+  <div class="box"><label>${L("Join with a code")}</label><div class="row"><input id="jcode" dir="ltr" maxlength="4" placeholder="ABCD" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px"><button class="sec" data-act="join" style="flex:0 0 100px">${L("Join")}</button></div>
+  <button class="link" data-act="tv" style="margin-top:8px">${L("📺 Use this device as the big screen")}</button></div>
   ${rulesBox()}`;
 }
 
@@ -711,10 +728,11 @@ function render(){
 }
 function renderInner(){
   const app=document.getElementById("app");
-  if(view==="setup"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><div class="banner">Almost there — paste your Firebase config into <b>config.js</b>.</div>`;return;}
-  if(view==="error"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><div class="banner">Couldn't sign in. Check that Anonymous sign-in is enabled in Firebase, then reload.</div>`;return;}
-  if(view==="loading"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">Loading…</p>`;return;}
-  if(view==="connecting"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">Connecting to room ${esc(code)}…</p><div class="center"><button class="link" data-act="leave">Cancel</button></div>`;return;}
+  try{document.documentElement.lang=lang();document.documentElement.dir=lang()==="he"?"rtl":"ltr";}catch(e){}
+  if(view==="setup"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><div class="banner">${L("Almost there — paste your Firebase config into <b>config.js</b>.")}</div>`;return;}
+  if(view==="error"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><div class="banner">${L("Couldn't sign in. Check that Anonymous sign-in is enabled in Firebase, then reload.")}</div>`;return;}
+  if(view==="loading"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Loading…")}</p>`;return;}
+  if(view==="connecting"){app.innerHTML=`<h1>Trivia <span>Deck</span></h1><p class="sub">${L("Connecting to room {0}…",esc(code))}</p><div class="center"><button class="link" data-act="leave">${L("Cancel")}</button></div>`;return;}
   if(view==="home"){app.innerHTML=homeView();return;}
   if(view==="game"&&s){
     if(role==="screen")app.innerHTML=tvView();
@@ -723,6 +741,7 @@ function renderInner(){
     if(sl)sl.onchange=()=>{s.settings.lives=sl.value;save();};
     if(st)st.onchange=()=>{s.settings.timer=Number(st.value);save();};
     const sd=document.getElementById("sdiff");if(sd)sd.onchange=()=>{s.settings.diff=sd.value;save();};
+    const sg=document.getElementById("slang");if(sg)sg.onchange=()=>{s.settings.lang=sg.value;s.settings.cats=[];s.settings.catNames=[];devLang=sg.value;ls.set("td_lang",sg.value);save();};
     if(sp)sp.onchange=()=>{s.settings.party=sp.checked;save();};
     if(isHost&&s.status==="lobby"&&!catsCache&&!catsLoading){catsLoading=true;loadCats().then(c=>{catsCache=c;render();});}
     if(s.phase==="question"&&s.q){const k=s.turn+":"+s.q.i;if(qSeenKey!==k){qSeenKey=k;qSeenAt=Date.now();}}
@@ -756,16 +775,17 @@ document.addEventListener("pointerdown",()=>{if(SFX.on)actx();},{passive:true});
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button");if(!t)return;
   const act=t.dataset.act;
-  if(act==="create"){if(!uid){toast("Still connecting…");return;}myName();createRoom();return;}
+  if(act==="lang"){devLang=t.dataset.v;ls.set("td_lang",devLang);render();return;}
+  if(act==="create"){if(!uid){toast(L("Still connecting…"));return;}myName();createRoom();return;}
   if(act==="join"||act==="tv"){
     const c=(document.getElementById("jcode").value||"").trim().toUpperCase();
-    if(!/^[A-Z]{4}$/.test(c)){toast("Enter the 4-letter room code");return;}
-    if(!uid){toast("Still connecting…");return;}
+    if(!/^[A-Z]{4}$/.test(c)){toast(L("Enter the 4-letter room code"));return;}
+    if(!uid){toast(L("Still connecting…"));return;}
     myName();openRoom(c,act==="tv"?"screen":"player");return;
   }
   if(act==="leave"){leave();return;}
-  if(act==="wa"){window.open("https://wa.me/?text="+encodeURIComponent("Join my Trivia Deck game! 🃏 "+roomLink()),"_blank");return;}
-  if(act==="copy"){try{await navigator.clipboard.writeText(roomLink());toast("Link copied");}catch(err){toast(roomLink());}return;}
+  if(act==="wa"){window.open("https://wa.me/?text="+encodeURIComponent(L("Join my Trivia Deck game! 🃏 {0}",roomLink())),"_blank");return;}
+  if(act==="copy"){try{await navigator.clipboard.writeText(roomLink());toast(L("Link copied"));}catch(err){toast(roomLink());}return;}
   if(act==="start"&&isHost){hostStart();return;}
   if(act==="again"&&isHost){backToLobby();return;}
   if(t.dataset.cat!==undefined&&isHost&&s.status==="lobby"){
