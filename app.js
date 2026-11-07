@@ -4,8 +4,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, set, get, push, remove, onValue, onChildAdded, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js";
-import { BEATLES } from "./packs/beatles.js";
+import { firebaseConfig } from "./config.js?v=3";
+import { BEATLES } from "./packs/beatles.js?v=3";
 
 // ---------------- Cards ----------------
 const CARDS={
