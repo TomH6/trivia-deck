@@ -292,7 +292,7 @@ function startTurn(){
   s.turn++;const forced=s.firstLeft>0;if(forced)s.firstLeft--;
   const t=draw(forced);
   Object.assign(s,{card:{type:t},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,
-    phase:"card",dur:2.8,until:now()+2800});
+    phase:"card",dur:3.3,until:now()+3300});
   log(nm(curId())+" drew "+CARDS[t].ic+" "+CARDS[t].name);
   save();
 }
@@ -428,7 +428,35 @@ function playersBar(){
   <div class="players">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?'<span class="you">you</span>':""}
   <div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
 }
-function cardHTML(t,anim){const C=CARDS[t];return `<div class="card ${anim?"anim":""}" style="--c:${C.c}"><div class="ic">${C.ic}</div><div class="cn">${esc(C.name)}</div><div class="cd">${esc(C.d)}</div></div>`;}
+const FXC={"var(--red)":"red","var(--blue)":"blue","var(--yellow)":"yellow","var(--green)":"green","var(--purple)":"purple","var(--grey)":"grey"};
+const HEX={red:"#ff5a5f",blue:"#3d8bff",yellow:"#ffc531",green:"#2ecc71",purple:"#a66bff",grey:"#c9c6e6"};
+function cardHTML(t,anim){
+  const C=CARDS[t],fx=FXC[C.c]||"grey";
+  return `<div class="card3d ${anim?"play":"still"} fx-${fx} k-${t}" data-fx="${fx}" data-ic="${C.ic}" style="--c:${C.c}"><div class="inner">
+    <div class="face front"><span class="crn tl">${C.ic}</span><span class="crn br">${C.ic}</span>
+      <div class="oval"><span class="big">${C.ic}</span></div><div class="cn">${esc(C.name)}</div><div class="cd">${esc(C.d)}</div></div>
+    <div class="face back"><div class="logo">TRIVIA<span>DECK</span></div></div></div></div>`;
+}
+// confetti-style burst from the card once it has flipped
+function burstFrom(el){
+  if(!el||(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches))return;
+  const fx=el.dataset.fx,ic=el.dataset.ic;
+  setTimeout(()=>{
+    if(!document.body.contains(el))return;
+    const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+    const n=document.body.classList.contains("tv")?34:22;
+    for(let i=0;i<n;i++){
+      const d=document.createElement("span");const emoji=i%6===0;
+      d.className="spark"+(emoji?" e":"");if(emoji)d.textContent=ic;
+      const a=Math.random()*Math.PI*2,dist=(emoji?120:90)+Math.random()*(r.width*.9);
+      d.style.left=cx+"px";d.style.top=cy+"px";
+      d.style.background=i%3===0?"#fff":HEX[fx];
+      d.style.setProperty("--dx",Math.cos(a)*dist+"px");d.style.setProperty("--dy",Math.sin(a)*dist+"px");
+      d.style.setProperty("--r",(Math.random()*720-360)+"deg");
+      document.body.appendChild(d);setTimeout(()=>d.remove(),950);
+    }
+  },1180);
+}
 function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(C.name)}</span>`;}
 const tbar=()=>`<div class="tbar" id="tbar"><i></i></div>`;
 function optLabel(ph,o){
@@ -583,6 +611,7 @@ function renderInner(){
     if(sp)sp.onchange=()=>{s.settings.party=sp.checked;save();};
     if(isHost&&s.status==="lobby"&&!catsCache&&!catsLoading){catsLoading=true;loadCats().then(c=>{catsCache=c;render();});}
     if(s.phase==="question"&&s.q){const k=s.turn+":"+s.q.i;if(qSeenKey!==k){qSeenKey=k;qSeenAt=Date.now();}}
+    const played=document.querySelector(".card3d.play");if(played&&!played.dataset.burst){played.dataset.burst="1";burstFrom(played);}
     spawnReacts();updateTimer();
   }
 }
