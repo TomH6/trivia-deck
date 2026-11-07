@@ -552,12 +552,12 @@ function tvView(){
 function catPicker(){
   const sel=s.settings.cats;
   if(!isHost){
-    const names=s.settings.catNames.length?s.settings.catNames:["Any category"];
+    const names=s.settings.catNames.length?s.settings.catNames:["🌍 Everything"];
     return `<label>Categories</label><div class="cats ro">${names.map(n=>`<button class="on">${esc(n)}</button>`).join("")}</div>`;
   }
   const cats=catsCache||[];
-  const chips=[{id:"any",name:"🎲 Any category"},...Object.entries(PACKS).map(([id,p])=>({id,name:p.name})),...cats];
-  return `<label>Categories <span class="small">(pick any — none means everything)</span></label><div class="cats">${chips.map(c=>{
+  const chips=[{id:"any",name:"🌍 Everything"},...Object.entries(PACKS).map(([id,p])=>({id,name:p.name})),...cats];
+  return `<label>Categories <span class="small">(tap to mix — or play 🌍 Everything)</span></label><div class="cats">${chips.map(c=>{
     const on=c.id==="any"?!sel.length:sel.includes(c.id);
     return `<button class="${on?"on":""}" data-cat="${esc(c.id)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`;}).join("")}${cats.length?"":'<span class="mute small">Loading categories…</span>'}</div>`;
 }
