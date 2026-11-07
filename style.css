@@ -365,3 +365,8 @@ body.tv .qhead .timer b{font-size:46px}
 .share button{font-size:16px}
 .row>div:has(#sdiff){flex:1.5}
 .row>div:has(#stimer),.row>div:has(#slives){flex:1}
+
+/* spotlight the current player: everyone else at 75% */
+.playing .pl:not(.turn){opacity:.75;transition:opacity .3s}
+.playing .pl.ghost:not(.turn){opacity:.4}
+.playing .pl.turn{opacity:1}
