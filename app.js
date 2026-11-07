@@ -538,7 +538,7 @@ function gameView(){
 function tvView(){
   let h=`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">Join at ${esc(location.host+location.pathname)}<b>${esc(s.code)}</b></div></div>`;
   if(s.status==="lobby"){
-    h+=`<div class="box center"><div class="q">Scan the room code on your phone to join</div><ul class="plist" style="max-width:520px;margin:0 auto;font-size:26px">${s.players.map(p=>`<li><span>${esc(p.name)}</span><span>${p.id===s.hostId?"👑":""}</span></li>`).join("")}</ul><div class="status">Waiting for the host to start…</div></div>`;
+    h+=`<div class="box center"><div class="q">Scan the room code on your phone to join</div><ul class="plist" style="max-width:520px;margin:0 auto;font-size:26px">${s.players.map(p=>`<li><span>${esc(p.name)}</span><span>${p.id===s.hostId?"🏠 host":""}</span></li>`).join("")}</ul><div class="status">Waiting for the host to start…</div></div>`;
     return h;
   }
   const turn=s.status==="playing"?curId():null;
@@ -567,7 +567,7 @@ function lobbyView(){
   let h=`<h1>Trivia <span>Deck</span></h1><p class="sub">Trivia with Uno-style chaos</p>`;
   h+=`<div class="box center"><div class="mute">Room code</div><div class="code">${esc(s.code)}</div>
     <div class="share"><button class="wa" data-act="wa">Invite on WhatsApp</button><button class="sec" data-act="copy">Copy link</button></div></div>`;
-  h+=`<div class="box"><label>Players (${s.players.length}/${MAX_PLAYERS})</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?" 👑":""}</span><span class="mute">${p.id===uid?"you":online(p.id)?"":"offline"}</span></li>`).join("")}</ul>
+  h+=`<div class="box"><label>Players (${s.players.length}/${MAX_PLAYERS})</label><ul class="plist">${s.players.map(p=>`<li class="${online(p.id)?"":"off"}"><span>${esc(p.name)}${p.id===s.hostId?' <span class="mute small">🏠 host</span>':""}</span><span class="mute">${p.id===uid?"you":online(p.id)?"":"offline"}</span></li>`).join("")}</ul>
   ${!me&&role==="player"?'<div class="status">Joining…</div>':""}</div>`;
   h+=`<div class="box">${catPicker()}`;
   if(isHost){
