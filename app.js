@@ -4,8 +4,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, set, get, push, remove, onValue, onChildAdded, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=3";
-import { BEATLES } from "./packs/beatles.js?v=3";
+import { firebaseConfig } from "./config.js?v=4";
+import { BEATLES } from "./packs/beatles.js?v=4";
+import { TOLKIEN } from "./packs/tolkien.js?v=4";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -45,7 +46,13 @@ const rd=()=>{const r=Math.random();return r<.3?"easy":r<.8?"medium":"hard";};
 const arr=v=>Array.isArray(v)?v:(v&&typeof v==="object"?Object.values(v):[]);
 
 // ---------------- questions ----------------
-const BEATLES_Q=BEATLES.map(q=>({cat:"Beatles: "+q[0],diff:q[1],text:q[2],a:q[3],w:[q[4],q[5],q[6]]}));
+const packQ=(label,list)=>list.map(q=>({cat:label+": "+q[0],diff:q[1],text:q[2],a:q[3],w:[q[4],q[5],q[6]]}));
+// custom packs: id -> {name shown in the lobby, questions}
+const PACKS={
+  beatles:{name:"🎸 Beatles pack",qs:packQ("Beatles",BEATLES)},
+  tolkien:{name:"💍 Tolkien pack",qs:packQ("Tolkien",TOLKIEN)},
+};
+const ALL_PACK_Q=Object.values(PACKS).flatMap(p=>p.qs);
 const OT={token:null,lastCall:0,cats:null};
 const POOL={qs:[],sources:[],next:0,busy:false,failed:false,seen:new Set()};
 const cleanCat=n=>n.replace(/^(Entertainment|Science): /,"");
@@ -79,7 +86,7 @@ async function fillPool(){
   if(POOL.busy||!POOL.sources.length)return;POOL.busy=true;
   try{
     const src=POOL.sources[POOL.next%POOL.sources.length];POOL.next++;
-    if(src==="beatles")addToPool(shuffle(BEATLES_Q.slice()));
+    if(PACKS[src])addToPool(shuffle(PACKS[src].qs.slice()));
     else{const got=await fetchBatch(src==="any"?null:src);if(!got.length)POOL.failed=true;addToPool(got);}
   }catch(e){POOL.failed=true;}
   POOL.busy=false;
@@ -87,7 +94,7 @@ async function fillPool(){
 async function preparePool(sources){
   POOL.qs=[];POOL.next=0;POOL.failed=false;POOL.sources=sources.length?sources.slice():["any"];
   await fillPool();
-  if(!POOL.qs.length){addToPool(BEATLES_Q);toast("Couldn't reach the trivia database — using the Beatles pack");}
+  if(!POOL.qs.length){addToPool(shuffle(ALL_PACK_Q.slice()));toast("Couldn't reach the trivia database — using the built-in packs");}
   // fetch the other chosen sources in the background (the API allows one call per 5 s)
   (async()=>{for(let i=1;i<POOL.sources.length;i++)await fillPool();})();
 }
@@ -96,7 +103,7 @@ function takeQuestion(diff,cat){
   let idx=POOL.qs.findIndex(q=>q.diff===diff&&(!cat||q.cat===cat));
   if(idx<0)idx=POOL.qs.findIndex(q=>!cat||q.cat===cat);
   if(idx<0)idx=POOL.qs.length?0:-1;
-  if(idx<0){POOL.seen.clear();addToPool(shuffle(BEATLES_Q.slice()));idx=0;}
+  if(idx<0){POOL.seen.clear();const own=POOL.sources.filter(x=>PACKS[x]).flatMap(x=>PACKS[x].qs);addToPool(shuffle((own.length?own:ALL_PACK_Q).slice()));idx=0;}
   return POOL.qs.splice(idx,1)[0];
 }
 function poolCats(){const m={};for(const q of POOL.qs)m[q.cat]=(m[q.cat]||0)+1;return Object.keys(m).filter(k=>m[k]>=2);}
@@ -549,7 +556,7 @@ function catPicker(){
     return `<label>Categories</label><div class="cats ro">${names.map(n=>`<button class="on">${esc(n)}</button>`).join("")}</div>`;
   }
   const cats=catsCache||[];
-  const chips=[{id:"any",name:"🎲 Any category"},{id:"beatles",name:"🎸 Beatles pack"},...cats];
+  const chips=[{id:"any",name:"🎲 Any category"},...Object.entries(PACKS).map(([id,p])=>({id,name:p.name})),...cats];
   return `<label>Categories <span class="small">(pick any — none means everything)</span></label><div class="cats">${chips.map(c=>{
     const on=c.id==="any"?!sel.length:sel.includes(c.id);
     return `<button class="${on?"on":""}" data-cat="${esc(c.id)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`;}).join("")}${cats.length?"":'<span class="mute small">Loading categories…</span>'}</div>`;
