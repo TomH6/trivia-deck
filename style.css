@@ -181,3 +181,6 @@ body.tv .stage{min-height:500px}
 .front{padding-bottom:34px}
 .fx-yellow .front{color:#3b2a00}
 .fx-yellow .front .cn{text-shadow:0 2px 0 rgba(255,255,255,.45)}
+
+.mute-btn{position:fixed;top:max(10px,env(safe-area-inset-top));right:10px;width:44px;height:44px;padding:0;border-radius:50%;background:var(--panel);font-size:20px;z-index:7}
+body.tv .mute-btn{top:auto;bottom:16px;right:16px}
