@@ -254,3 +254,11 @@ body.tv .turnbar{font-size:34px;padding:14px}
 
 .mute-btn.inline{position:static;width:30px;height:30px;font-size:15px;vertical-align:middle;margin-inline-start:6px;background:var(--panel2)}
 .dir{align-items:center}
+
+.summary table{width:100%;border-collapse:collapse;margin-top:6px;font-size:16px}
+.summary th{color:var(--mute);font-weight:500;font-size:13px;text-align:start;padding:4px 6px}
+.summary td{padding:9px 6px;border-top:1px solid var(--panel2)}
+.summary td:not(:first-child),.summary th:not(:first-child){text-align:center;width:56px}
+.summary tr.win td{color:var(--yellow)}
+body.tv .summary{max-width:760px;margin:16px auto}
+body.tv .summary table{font-size:26px}

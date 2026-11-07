@@ -5,7 +5,7 @@ export const HE={
 "Easy Street":"דרך קלה","You get an easy question.":"מקבלים שאלה קלה.",
 "50/50":"50/50","Two wrong answers are removed.":"שתי תשובות שגויות נמחקות.",
 "Category Pick":"בחירת קטגוריה","You choose the category.":"אתם בוחרים את הקטגוריה.",
-"Shield":"מגן","Gain a shield that blocks one lost life. Then answer.":"מקבלים מגן שחוסם איבוד חיים אחד. ואז עונים.",
+"Shield":"מגן","Answer right to earn a shield that blocks one lost life.":"ענו נכון וקבלו מגן שחוסם איבוד חיים אחד.","+1 shield 🛡️":"+1 מגן 🛡️",
 "Safe Round":"סבב מוגן","Nobody loses lives for one full round. Then answer.":"אף אחד לא מאבד חיים במשך סבב שלם. ואז עונים.",
 "Double Trouble":"צרה כפולה","Answer 2 questions. Miss either and lose a life.":"ענו על 2 שאלות. טעות באחת מהן — מאבדים חיים.",
 "Hard Mode":"מצב קשה","A hard question. Right = win back a lost life.":"שאלה קשה. תשובה נכונה = מחזירים חיים שאבדו.",
@@ -38,7 +38,7 @@ export const HE={
 "👻 {0} guessed right":"👻 {0} ניחש/ה נכון","{0} survived All In! 🎰":"{0} שרד/ה את הכול או כלום! 🎰",
 "🏆 {0} wins!":"🏆 {0} ניצח/ה!","Nobody":"אף אחד",
 // play screen
-"Room":"חדר","🎯 Your turn!":"🎯 התור שלך!","🎯 {0}'s turn":"🎯 התור של {0}","Order ➡️":"סדר ⬅️","Order ⬅️ (reversed)":"סדר ➡️ (הפוך)","Order ⬅️":"סדר ➡️"," · 🕊️ safe":" · 🕊️ מוגן","🕊️ safe round":"🕊️ סבב מוגן",
+"Room":"חדר","Game summary":"סיכום המשחק","Right":"נכונות","🎯 sharpest":"🎯 הכי מדויק/ת","🎯 Your turn!":"🎯 התור שלך!","🎯 {0}'s turn":"🎯 התור של {0}","Order ➡️":"סדר ⬅️","Order ⬅️ (reversed)":"סדר ➡️ (הפוך)","Order ⬅️":"סדר ➡️"," · 🕊️ safe":" · 🕊️ מוגן","🕊️ safe round":"🕊️ סבב מוגן",
 "Your turn — you drew…":"התור שלך — שלפת…","{0} drew…":"{0} שלף/ה…",
 "who gets the bomb 💣":"מי מקבל את הפצצה 💣","the difficulty 🎯":"את רמת הקושי 🎯","a category 🎯":"קטגוריה 🎯","a card for the Joker 🃏":"קלף בשביל הג'וקר 🃏",
 "Choose {0}":"בחרו {0}","{0} is choosing {1}":"{0} בוחר/ת {1}","Easy":"קל","Medium":"בינוני","Hard":"קשה","easy":"קל","medium":"בינוני","hard":"קשה",

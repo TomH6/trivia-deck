@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=13";
+import { HE } from "./i18n.js?v=15";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -16,7 +16,7 @@ const CARDS={
  easy:{name:"Easy Street",ic:"🌴",c:"var(--green)",d:"You get an easy question.",n:2},
  fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Two wrong answers are removed.",n:2},
  cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"You choose the category.",n:3},
- shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Gain a shield that blocks one lost life. Then answer.",n:2},
+ shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Answer right to earn a shield that blocks one lost life.",n:2},
  safe:{name:"Safe Round",ic:"🕊️",c:"var(--green)",d:"Nobody loses lives for one full round. Then answer.",n:1},
  double:{name:"Double Trouble",ic:"✌️",c:"var(--yellow)",d:"Answer 2 questions. Miss either and lose a life.",n:4},
  hard:{name:"Hard Mode",ic:"🔥",c:"var(--yellow)",d:"A hard question. Right = win back a lost life.",n:3},
@@ -149,7 +149,7 @@ function toast(t){const d=document.createElement("div");d.className="toast";d.te
 // Firebase drops empty arrays/objects; put the shape back.
 function normalize(x){
   if(!x)return x;
-  x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0},p));
+  x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0},p));
   for(const k of ["log","reactions","deck","who","queue","ghostWho"])x[k]=arr(x[k]);
   for(const k of ["answers","cursed","ghostAns"])x[k]=x[k]||{};
   x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:"en"},x.settings||{});
@@ -325,7 +325,7 @@ async function hostStart(){
   const LV=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
   Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,
     firstLeft:n,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
-  s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0}));
+  s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0}));
   startTurn();
 }
 function backToLobby(){Object.assign(s,{status:"lobby",phase:null,q:null,card:null});log(L("Back to the lobby"));save();}
@@ -368,7 +368,7 @@ function applyCard(t){
     case "buzzer":return ask({who:s.players.map(p=>p.id),diff:rd(),mode:"buzzer"});
     case "sudden":return ask({who:alive().map(p=>p.id),diff:rd(),mode:"sudden"});
     case "safe":s.safeLeft=alive().length;return ask({who:[me],diff:rd()});
-    case "shield":pl(me).shields++;return ask({who:[me],diff:rd()});
+    case "shield":return ask({who:[me],diff:rd(),reward:"shield"});
     case "underdog":{const al=alive(),mx=Math.max(...al.map(p=>p.lives)),mn=Math.min(...al.map(p=>p.lives));
       if(pl(me).lives===mn&&mn<mx)log(L("{0} is the underdog 🐶",nm(me))+" "+heal(me));else log(L("{0} isn't the underdog — no bonus",nm(me)));
       return ask({who:[me],diff:"easy"});}
@@ -386,6 +386,7 @@ function choose(v){
 function ask(item){
   let diff=item.diff;
   if(item.who.length===1&&s.cursed[item.who[0]]){diff=diff==="easy"?"medium":"hard";delete s.cursed[item.who[0]];item.cursed=true;}
+  item.ghosts=s.players.filter(p=>p.ghost).map(p=>p.id); // who was already out when this was asked
   const Q=takeQuestion(diff,item.cat);
   let opts=item.fifty?[Q.a,rand(Q.w)]:[Q.a,...Q.w];shuffle(opts);
   const secs=item.time||Number(s.settings.timer)||20;
@@ -409,7 +410,7 @@ function resolve(){
   for(const id of s.who){const a=s.answers[id];res[id]=a?(a.c===q.correct?"right":"wrong"):"timeout";}
   if(s.mode==="single"){
     const id=s.who[0];const ok=res[id]==="right";s.lastOk=ok;
-    if(ok){text=L("{0} got it ✅",nm(id));if(it.reward==="heal")text+=" "+heal(id);}
+    if(ok){text=L("{0} got it ✅",nm(id));if(it.reward==="heal")text+=" "+heal(id);if(it.reward==="shield"){pl(id).shields++;text+=" "+L("+1 shield 🛡️");}}
     else text=(res[id]==="timeout"?L("{0} ran out of time ⏰",nm(id)):L("{0} got it wrong ❌",nm(id)))+" "+lose(id,it.lose||1);
   }else if(s.mode==="buzzer"){
     const rights=Object.entries(s.answers).filter(([,a])=>a.c===q.correct).sort((a,b)=>a[1].t-b[1].t);
@@ -426,6 +427,8 @@ function resolve(){
   }
   const gr=Object.entries(s.ghostAns).filter(([,a])=>a.c===q.correct).map(([id])=>nm(id)+ghostScore(id));
   if(gr.length)text+=" · "+L("👻 {0} guessed right",gr.join(", "));
+  // tally every living player's answers for the end-of-game summary
+  for(const id of s.who){const p=pl(id);if(!p||(it.ghosts||[]).includes(id))continue;p.asked++;if(res[id]==="right")p.right++;}
   s.result={res,text};log(text);
   Object.assign(s,{phase:"reveal",dur:3.5,until:now()+3500});save();
 }
@@ -615,6 +618,16 @@ function optLabel(ph,o){
   const [k,v]=o.split(/:(.*)/s);return k==="cat"?esc(v):esc(L(v[0].toUpperCase()+v.slice(1)));
 }
 
+// end-of-game summary: right answers for everyone
+function summaryTable(){
+  const rows=s.players.map(p=>({p,pct:p.asked?Math.round(100*p.right/p.asked):0})).sort((a,b)=>b.p.right-a.p.right||b.pct-a.pct);
+  const best=Math.max(...rows.map(r=>r.p.asked>=3?r.pct:-1));
+  return `<div class="box summary"><label>${L("Game summary")}</label><table>
+    <tr><th></th><th>${L("Right")}</th><th>%</th><th>👻</th></tr>
+    ${rows.map(({p,pct})=>`<tr class="${p.id===s.winner?"win":""}"><td>${p.id===s.winner?"🏆 ":""}${esc(p.name)}${best>=0&&pct===best&&p.asked>=3?` <span class="tag">${L("🎯 sharpest")}</span>`:""}</td>
+      <td><b>${p.right}</b><span class="mute">/${p.asked}</span></td><td>${p.asked?pct+"%":"–"}</td><td>${p.gp||"–"}</td></tr>`).join("")}
+  </table></div>`;
+}
 // main play area, shared by phones and the big screen
 function playArea(tv){
   const me=role==="player"?pl(uid):null;
@@ -658,8 +671,7 @@ function playArea(tv){
     }
   }else if(s.status==="over"){
     h+=`<div class="winner">${L("🏆 {0} wins!",esc(s.winner?nm(s.winner):L("Nobody")))}</div>`;
-    const g=s.players.filter(p=>p.gp>0);
-    if(g.length)h+=`<div class="center mute">${L("Ghost points: {0}",g.map(p=>esc(p.name)+" "+p.gp).join(" · "))}</div>`;
+    h+=summaryTable();
     if(!tv)h+=isHost?`<div class="box"><button data-act="again">${L("Play again")}</button></div>`:`<div class="status">${L("Waiting for the host to start a new game…")}</div>`;
   }else if(s.status==="starting"){
     h+=`<div class="status" style="margin-top:40px">${L("🃏 Shuffling the deck and fetching questions…")}</div>`;
@@ -677,7 +689,6 @@ function gameView(){
   if(!me&&s.status!=="lobby")h+=`<div class="banner info">${L("This game already started — you're watching. You can join the next one.")}</div>`;
   h+=turnBanner();
   h+=playArea(false);
-  h+=`<div class="log">${(s.log||[]).slice(-4).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`;
   h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
   if(me)h+=`<div class="react">${EMOJI.map(e=>`<button data-react="${e}">${e}</button>`).join("")}</div>`;
   return h;
@@ -693,8 +704,7 @@ function tvView(){
   const turn=s.status==="playing"?curId():null;
   h+=`<div class="tvgrid"><div>${turnBanner()}${playArea(true)}</div><div class="side">
     <div class="dir" style="font-size:18px"><span>${s.dir===1?L("Order ➡️"):L("Order ⬅️")}</span><span>${s.safeLeft>0?L("🕊️ safe round"):""}</span></div>
-    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}"><div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}
-    <div class="log">${(s.log||[]).slice(-5).map(l=>`<div>${esc(l)}</div>`).join("")}</div></div></div>`;
+    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}"><div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div></div>`;
   return h;
 }
 
