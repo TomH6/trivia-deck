@@ -1,11 +1,10 @@
-// Paste your Firebase web app config here (Project settings → Your apps → Web app).
-// These values are public identifiers, not secrets — access is controlled by database.rules.json.
+// Firebase web app config (public identifiers, not secrets — access is controlled by database.rules.json).
 export const firebaseConfig = {
-  apiKey: "PASTE_ME",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyC9oO1uwHhSjeDyxLJWIKsBf-R994wpStY",
+  authDomain: "trivia-deck.firebaseapp.com",
+  databaseURL: "https://trivia-deck-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "trivia-deck",
+  storageBucket: "trivia-deck.firebasestorage.app",
+  messagingSenderId: "29786422488",
+  appId: "1:29786422488:web:76594c37e791fe92802bad"
 };
