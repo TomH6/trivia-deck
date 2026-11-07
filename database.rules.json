@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "rooms": {
+      "$code": {
+        ".read": "auth != null",
+        "state": {
+          ".write": "auth != null && (!data.exists() || data.child('hostId').val() === auth.uid)"
+        },
+        "inputs": {
+          "$id": {
+            ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && root.child('rooms').child($code).child('state').child('hostId').val() === auth.uid))"
+          }
+        },
+        "presence": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    }
+  }
+}
