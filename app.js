@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=12";
+import { HE } from "./i18n.js?v=13";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -339,7 +339,7 @@ function startTurn(){
   s.turn++;const forced=s.firstLeft>0;if(forced)s.firstLeft--;
   const t=draw(forced);
   Object.assign(s,{card:{type:t},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,
-    phase:"card",dur:3.3,until:now()+3300});
+    phase:"card",dur:5,until:now()+5000});
   log(L("{0} drew {1}",nm(curId()),CARDS[t].ic+" "+L(CARDS[t].name)));
   save();
 }
@@ -362,8 +362,8 @@ function applyCard(t){
       if(o.length===1){log(L("{0} passes the bomb to {1} 💣",nm(me),nm(o[0])));return ask({who:o,diff:rd()});}
       return pickPhase("pick",me,o,15);}
     case "curse":{const nx=s.players[nextAlive(s.cur)].id;if(nx!==me){s.cursed[nx]=true;log(L("{0} is cursed 🧿",nm(nx)));}return ask({who:[me],diff:rd()});}
-    case "skip":Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:2.4,until:now()+2400});return save();
-    case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:L("Play reverses direction 🔄"),dur:2.4,until:now()+2400});return save();
+    case "skip":Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3.5,until:now()+3500});return save();
+    case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:L("Play reverses direction 🔄"),dur:3.5,until:now()+3500});return save();
     case "jump":s.extraSkip=1;return ask({who:[me],diff:rd()});
     case "buzzer":return ask({who:s.players.map(p=>p.id),diff:rd(),mode:"buzzer"});
     case "sudden":return ask({who:alive().map(p=>p.id),diff:rd(),mode:"sudden"});
@@ -436,7 +436,7 @@ function afterReveal(){
   }
   if(s.chain==="allin"&&s.lastOk&&!s.chainFail){
     const t=L("{0} survived All In! 🎰",nm(curId()))+" "+heal(curId());log(t);
-    s.chain=null;Object.assign(s,{phase:"info",info:t,dur:2.5,until:now()+2500});save();return;
+    s.chain=null;Object.assign(s,{phase:"info",info:t,dur:3.5,until:now()+3500});save();return;
   }
   endTurn();
 }
@@ -516,7 +516,7 @@ function soundsFor(S){
   if(S.status==="playing"&&S.phase==="card"&&P.cardKey!==SFX.prev.cardKey){
     const fx=FXC[CARDS[S.card.type].c]||"grey";
     sfx("deal");setTimeout(()=>sfx("flip"),560);setTimeout(()=>sfx("card",fx),1150);
-    if(curId()===uid)setTimeout(()=>sfx("turn"),1700);
+    if(curId()===uid){setTimeout(()=>sfx("turn"),1700);try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}}
   }
   if(S.phase==="reveal"&&P.phase!=="reveal"&&S.result){
     const mine=S.result.res&&S.result.res[uid];
@@ -551,11 +551,16 @@ function hearts(p){
   return "❤️".repeat(p.lives)+"🖤".repeat(Math.max(0,(s.maxLives||p.lives)-p.lives))+(p.shields?" 🛡️"+(p.shields>1?p.shields:""):"");
 }
 const online=id=>!!presence[id];
+function turnBanner(){
+  if(s.status!=="playing")return "";
+  const cur=curId();if(!cur)return "";
+  return cur===uid?`<div class="turnbar mine">${L("🎯 Your turn!")}</div>`:`<div class="turnbar">${L("🎯 {0}'s turn",esc(nm(cur)))}</div>`;
+}
 function playersBar(){
   const turn=s.status==="playing"?curId():null;
-  return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""}</span></div>
+  return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""} ${muteBtn(true)}</span></div>
   <div class="players">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?`<span class="you">${L("you")}</span>`:""}
-  <div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
+  ${p.id===turn?'<span class="turnmark">🎯</span>':""}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
 }
 const FXC={"var(--red)":"red","var(--blue)":"blue","var(--yellow)":"yellow","var(--green)":"green","var(--purple)":"purple","var(--grey)":"grey"};
 const HEX={red:"#ff5a5f",blue:"#3d8bff",yellow:"#ffc531",green:"#2ecc71",purple:"#a66bff",grey:"#c9c6e6"};
@@ -602,7 +607,8 @@ function syncOverlay(){
   burstFrom(el.querySelector(".card3d"));
 }
 function chip(t){const C=CARDS[t];return `<span class="chip" style="--c:${C.c}">${C.ic} ${esc(L(C.name))}</span>`;}
-const tbar=()=>`<div class="tbar" id="tbar"><i></i></div>`;
+const RING=2*Math.PI*19;
+const tbar=()=>`<div class="timer" id="tbar"><svg viewBox="0 0 44 44" aria-hidden="true"><circle class="trk" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" style="stroke-dasharray:${RING};stroke-dashoffset:0"/></svg><b></b></div>`;
 function optLabel(ph,o){
   if(ph==="pick")return esc(nm(o));
   if(ph==="joker")return CARDS[o].ic+" "+esc(L(CARDS[o].name));
@@ -669,15 +675,15 @@ function gameView(){
     if(me.haunts>0)h+=`<div class="box"><label>${L(me.haunts>1?"🧿 You have {0} haunts — who do you curse?":"🧿 You have {0} haunt — who do you curse?",me.haunts)}</label><div class="picks">${alive().map(p=>`<button class="sec" data-haunt="${esc(p.id)}">${esc(p.name)}</button>`).join("")}</div></div>`;
   }
   if(!me&&s.status!=="lobby")h+=`<div class="banner info">${L("This game already started — you're watching. You can join the next one.")}</div>`;
+  h+=turnBanner();
   h+=playArea(false);
   h+=`<div class="log">${(s.log||[]).slice(-4).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`;
   h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
-  h+=muteBtn();
   if(me)h+=`<div class="react">${EMOJI.map(e=>`<button data-react="${e}">${e}</button>`).join("")}</div>`;
   return h;
 }
 
-const muteBtn=()=>`<button class="mute-btn" data-act="mute" aria-label="${L(SFX.on?"Mute sounds":"Turn sounds on")}">${SFX.on?"🔊":"🔇"}</button>`;
+const muteBtn=(inline)=>`<button class="mute-btn${inline?" inline":""}" data-act="mute" aria-label="${L(SFX.on?"Mute sounds":"Turn sounds on")}">${SFX.on?"🔊":"🔇"}</button>`;
 function tvView(){
   let h=muteBtn()+`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">${L("Join at {0}",esc(location.host+location.pathname))}<b>${esc(s.code)}</b></div></div>`;
   if(s.status==="lobby"){
@@ -685,7 +691,7 @@ function tvView(){
     return h;
   }
   const turn=s.status==="playing"?curId():null;
-  h+=`<div class="tvgrid"><div>${playArea(true)}</div><div class="side">
+  h+=`<div class="tvgrid"><div>${turnBanner()}${playArea(true)}</div><div class="side">
     <div class="dir" style="font-size:18px"><span>${s.dir===1?L("Order ➡️"):L("Order ⬅️")}</span><span>${s.safeLeft>0?L("🕊️ safe round"):""}</span></div>
     ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}"><div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}
     <div class="log">${(s.log||[]).slice(-5).map(l=>`<div>${esc(l)}</div>`).join("")}</div></div></div>`;
@@ -799,9 +805,12 @@ function spawnReacts(){
 function updateTimer(){
   const V=isHost&&shown?shown:s;
   const b=document.getElementById("tbar");if(!b||!V||!V.until)return;
-  const left=Math.max(0,V.until-now()),total=(V.dur||20)*1000;
-  b.firstElementChild.style.width=Math.min(100,left/total*100)+"%";
-  b.classList.toggle("low",left<4000);
+  const total=(V.dur||20)*1000,left=Math.min(total,Math.max(0,V.until-now()));
+  const sec=Math.ceil(left/1000);
+  const arc=b.querySelector(".arc"),num=b.querySelector("b");
+  if(arc)arc.style.strokeDashoffset=String(RING*(1-left/total));
+  if(num&&num.textContent!==String(sec))num.textContent=String(sec);
+  b.classList.toggle("low",sec<=5);
   if(V.phase==="question"){const sec=Math.ceil(left/1000),k=V.q&&V.q.i+":"+sec;if(sec<=5&&sec>0&&SFX.lastTick!==k){SFX.lastTick=k;sfx("tick",sec<=2);}}
 }
 setInterval(updateTimer,200);

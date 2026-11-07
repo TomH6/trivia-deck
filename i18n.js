@@ -38,7 +38,7 @@ export const HE={
 "👻 {0} guessed right":"👻 {0} ניחש/ה נכון","{0} survived All In! 🎰":"{0} שרד/ה את הכול או כלום! 🎰",
 "🏆 {0} wins!":"🏆 {0} ניצח/ה!","Nobody":"אף אחד",
 // play screen
-"Room":"חדר","Order ➡️":"סדר ⬅️","Order ⬅️ (reversed)":"סדר ➡️ (הפוך)","Order ⬅️":"סדר ➡️"," · 🕊️ safe":" · 🕊️ מוגן","🕊️ safe round":"🕊️ סבב מוגן",
+"Room":"חדר","🎯 Your turn!":"🎯 התור שלך!","🎯 {0}'s turn":"🎯 התור של {0}","Order ➡️":"סדר ⬅️","Order ⬅️ (reversed)":"סדר ➡️ (הפוך)","Order ⬅️":"סדר ➡️"," · 🕊️ safe":" · 🕊️ מוגן","🕊️ safe round":"🕊️ סבב מוגן",
 "Your turn — you drew…":"התור שלך — שלפת…","{0} drew…":"{0} שלף/ה…",
 "who gets the bomb 💣":"מי מקבל את הפצצה 💣","the difficulty 🎯":"את רמת הקושי 🎯","a category 🎯":"קטגוריה 🎯","a card for the Joker 🃏":"קלף בשביל הג'וקר 🃏",
 "Choose {0}":"בחרו {0}","{0} is choosing {1}":"{0} בוחר/ת {1}","Easy":"קל","Medium":"בינוני","Hard":"קשה","easy":"קל","medium":"בינוני","hard":"קשה",
