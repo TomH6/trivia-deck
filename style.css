@@ -370,3 +370,40 @@ body.tv .qhead .timer b{font-size:46px}
 .playing .pl:not(.turn){opacity:.75;transition:opacity .3s}
 .playing .pl.ghost:not(.turn){opacity:.4}
 .playing .pl.turn{opacity:1}
+
+/* party mode helpers */
+.tvbtn{margin-top:10px;font-size:16px}
+.bigscreen{margin-top:12px;padding:12px;border-radius:14px;background:var(--ink);border:1px dashed #4a4c8a}
+.bigscreen.on{border:1px solid rgba(46,204,113,.5);background:rgba(46,204,113,.1)}
+.bs-status{font-weight:600;margin-bottom:6px}
+.bs-link{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--yellow);word-break:break-all;margin:6px 0 10px}
+.bigscreen .sec{font-size:15px;padding:10px}
+/* big screen sized to the window, nothing below the fold */
+body.tv #app{padding:2.2vh 3vw;min-height:100vh;box-sizing:border-box}
+body.tv .tvhead{margin-bottom:1.5vh}
+body.tv .tvhead h1{font-size:5vh}
+body.tv .tvcode{font-size:2.2vh}
+body.tv .tvcode b{font-size:6vh}
+body.tv .tvgrid{grid-template-columns:1fr minmax(240px,26vw);gap:2.5vw}
+body.tv .turnbar{font-size:3.2vh;padding:1vh;margin-bottom:1vh}
+body.tv .qhead .timer{width:9vh;height:9vh;flex-basis:9vh}
+body.tv .qhead .timer b{font-size:3.8vh}
+body.tv .chip{font-size:2.4vh}
+body.tv .qcard{padding:1.6vh 2vw;margin:1vh 0}
+body.tv .q{font-size:clamp(20px,4.2vh,48px)}
+body.tv .tag{font-size:1.8vh}
+body.tv .opts{gap:1.2vh;margin-top:1vh}
+body.tv .opt{font-size:clamp(16px,3vh,34px);min-height:0;padding:1.5vh 1.2vw}
+body.tv .opt .lt{width:5vh;height:5vh;flex-basis:5vh;font-size:2.8vh}
+body.tv .result{font-size:2.8vh;padding:1.2vh;margin:1vh 0}
+body.tv .status{font-size:2.6vh}
+body.tv .side .pl{padding:1vh 1vw;margin-bottom:1vh}
+body.tv .side .pl .nm{font-size:2.6vh}
+body.tv .side .pl .hp{font-size:2.3vh}
+body.tv .av{width:4.6vh;height:4.6vh;font-size:2.4vh}
+body.tv .stage-ph{min-height:0}
+body.tv .card3d{width:31vh;height:44vh}
+body.tv .front .oval{width:21vh;height:16vh}
+body.tv .front .big{font-size:9vh}
+body.tv .front .cn{font-size:3.4vh;margin-top:2.4vh}
+body.tv .front .cd{font-size:2vh}

@@ -8,28 +8,22 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=19";
+import { HE } from "./i18n.js?v=22";
 
 // ---------------- Cards ----------------
 const CARDS={
  plain:{name:"Answer",ic:"❓",c:"var(--grey)",d:"Answer one question.",n:9},
- easy:{name:"Easy Street",ic:"🌴",c:"var(--green)",d:"You get an easy question.",n:2},
  fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Two wrong answers are removed.",n:2},
  cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"You choose the category.",n:3},
  shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Answer right to earn a shield that blocks one lost life.",n:2},
- safe:{name:"Safe Round",ic:"🕊️",c:"var(--green)",d:"Nobody loses lives for one full round. Then answer.",n:1},
  double:{name:"Double Trouble",ic:"✌️",c:"var(--yellow)",d:"Answer 2 questions. Miss either and lose a life.",n:4},
  hard:{name:"Hard Mode",ic:"🔥",c:"var(--yellow)",d:"A hard question. Right = win back a lost life.",n:3},
  speed:{name:"Speed Round",ic:"⚡",c:"var(--yellow)",d:"Only 7 seconds to answer.",n:3},
- allin:{name:"All In",ic:"🎰",c:"var(--yellow)",d:"3 questions. All right = win back a life. Any wrong = lose 2.",n:1},
  bomb:{name:"Pass the Bomb",ic:"💣",c:"var(--red)",d:"Pick who has to answer your question.",n:3},
  curse:{name:"Curse",ic:"🧿",c:"var(--red)",d:"The next player gets a harder question. Then you answer.",n:2},
  sudden:{name:"Sudden Death",ic:"💀",c:"var(--red)",d:"Everyone answers. Wrong = lose a life.",n:1},
  skip:{name:"Skip",ic:"⏭️",c:"var(--blue)",d:"Your turn is skipped.",n:2},
- reverse:{name:"Reverse",ic:"🔄",c:"var(--blue)",d:"Play changes direction. No question for you.",n:3},
- jump:{name:"Jump",ic:"🦘",c:"var(--blue)",d:"Answer, then the next player is skipped.",n:2},
  buzzer:{name:"Buzzer Round",ic:"🔔",c:"var(--purple)",d:"Everyone answers. Fastest right answer wins back a life.",n:2},
- underdog:{name:"Underdog",ic:"🐶",c:"var(--purple)",d:"If you have the fewest lives, win one back. Then answer an easy question.",n:2},
  joker:{name:"Joker",ic:"🃏",c:"var(--purple)",d:"Choose any card you like.",n:1},
 };
 const EMOJI=["😂","😱","🔥","👏","😈","💀"];
@@ -44,7 +38,7 @@ const sample=(a,n)=>shuffle(a.slice()).slice(0,n);
 const esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
-const DIFF_MIX={chill:[.65,.30],normal:[.45,.45],brainy:[.20,.50]}; // [easy, medium] — rest is hard
+const DIFF_MIX={chill:[.85,.15],normal:[.25,.70],brainy:[.05,.50]}; // [easy, medium] — rest is hard
 const rd=()=>{const m=DIFF_MIX[(typeof s!=="undefined"&&s&&s.settings&&s.settings.diff)||"normal"]||DIFF_MIX.normal;const r=Math.random();return r<m[0]?"easy":r<m[0]+m[1]?"medium":"hard";};
 const arr=v=>Array.isArray(v)?v:(v&&typeof v==="object"?Object.values(v):[]);
 // ---------------- language ----------------
@@ -96,6 +90,8 @@ async function fetchBatch(catId){
   return j.results.map(r=>({cat:cleanCat(dec(r.category)),diff:r.difficulty,text:dec(r.question),a:dec(r.correct_answer),w:r.incorrect_answers.map(dec)}));
 }
 function addToPool(list){for(const q of list){if(POOL.seen.has(q.text))continue;POOL.seen.add(q.text);POOL.qs.push(q);}}
+// built-in packs: reload freely for every game; only skip questions already waiting in the pool
+function addPack(src){const have=new Set(POOL.qs.map(q=>q.text));for(const q of shuffle(PACKS[src].qs.slice()))if(!have.has(q.text))POOL.qs.push({...q,src});}
 // sources: "any" | Open Trivia category id | pack id. Every pooled question remembers its source.
 const left=src=>POOL.qs.filter(q=>q.src===src).length;
 async function fillPool(src){
@@ -103,7 +99,7 @@ async function fillPool(src){
   try{
     // refill whichever chosen source is running lowest (or the one asked for)
     src=src||POOL.sources.slice().sort((a,b)=>left(a)-left(b))[0];
-    if(PACKS[src])addToPool(shuffle(PACKS[src].qs.slice()).map(q=>({...q,src})));
+    if(PACKS[src])addPack(src);
     else{const got=await fetchBatch(src==="any"?null:src);if(!got.length)POOL.failed=true;addToPool(got.map(q=>({...q,src})));}
   }catch(e){POOL.failed=true;}
   POOL.busy=false;
@@ -112,7 +108,7 @@ async function preparePool(sources){
   POOL.qs=[];POOL.failed=false;POOL.sources=sources.length?sources.slice():defaultSources();
   // load the first two sources before the game starts, the rest in the background (the API allows one call per 5 s)
   for(let i=0;i<Math.min(2,POOL.sources.length);i++)await fillPool(POOL.sources[i]);
-  if(!POOL.qs.length){addToPool(shuffle(ALL_PACK_Q_FOR()));toast(L("Couldn't reach the trivia database — using the built-in packs"));}
+  if(!POOL.qs.length){packIds().forEach(addPack);toast(L("Couldn't reach the trivia database — using the built-in packs"));}
   (async()=>{for(let i=2;i<POOL.sources.length;i++)await fillPool(POOL.sources[i]);})();
 }
 function takeQuestion(diff,cat){
@@ -126,8 +122,8 @@ function takeQuestion(diff,cat){
   }
   const d=c.filter(i=>POOL.qs[i].diff===diff);if(d.length)c=d;
   if(!c.length){POOL.seen.clear();const own=POOL.sources.filter(x=>PACKS[x]);
-    if(own.length)own.forEach(x=>addToPool(shuffle(PACKS[x].qs.slice()).map(q=>({...q,src:x}))));
-    else addToPool(shuffle(ALL_PACK_Q_FOR()));
+    if(own.length)own.forEach(addPack);
+    else packIds().forEach(addPack);
     c=POOL.qs.map((q,i)=>i);}
   return POOL.qs.splice(rand(c),1)[0];
 }
@@ -152,7 +148,7 @@ function normalize(x){
   x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0},p));
   for(const k of ["log","reactions","deck","who","queue","ghostWho"])x[k]=arr(x[k]);
   for(const k of ["answers","cursed","ghostAns"])x[k]=x[k]||{};
-  x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:"en"},x.settings||{});
+  x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:"en",cards:"some"},x.settings||{});
   x.settings.cats=arr(x.settings.cats);x.settings.catNames=arr(x.settings.catNames);
   if(x.q)x.q.opts=arr(x.q.opts);
   if(x.options)x.options=arr(x.options);
@@ -277,7 +273,13 @@ async function createRoom(){
 
 // ---------------- host: game logic ----------------
 function log(t){s.log=(s.log||[]).slice(-6).concat([t]);}
-function buildDeck(){const d=[];for(const k in CARDS)for(let i=0;i<CARDS[k].n;i++)d.push(k);return shuffle(d);}
+const CARD_MIX={few:.8,some:.65,lots:.19}; // share of turns that are a plain question
+function buildDeck(){
+  const share=CARD_MIX[(s&&s.settings&&s.settings.cards)||"some"]||CARD_MIX.some;
+  const d=[];for(const k in CARDS)if(k!=="plain")for(let i=0;i<CARDS[k].n;i++)d.push(k);
+  const plain=Math.round(d.length*share/(1-share));for(let i=0;i<plain;i++)d.push("plain");
+  return shuffle(d);
+}
 
 function handle(inp){
   if(!s||!inp)return;
@@ -324,7 +326,7 @@ async function hostStart(){
   await preparePool(s.settings.cats);
   const LV=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
   Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,
-    firstLeft:n,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
+    firstLeft:s.settings.cards==="lots"?n:0,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
   s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0}));
   startTurn();
 }
@@ -341,6 +343,7 @@ function startTurn(){
   Object.assign(s,{card:{type:t},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,
     phase:"card",dur:5,until:now()+5000});
   log(L("{0} drew {1}",nm(curId()),CARDS[t].ic+" "+L(CARDS[t].name)));
+  if(t==="plain"){applyCard("plain");return;} // nothing to read: straight to the question
   save();
 }
 function pickPhase(phase,chooser,options,secs){Object.assign(s,{phase,chooser,options,dur:secs,until:now()+secs*1000});save();}
@@ -356,11 +359,11 @@ function applyCard(t){
     case "fifty":return ask({who:[me],diff:rd(),fifty:true});
     case "allin":s.chain="allin";s.queue=[{who:[me],diff:rd(),lose:2},{who:[me],diff:rd(),lose:2}];return ask({who:[me],diff:rd(),lose:2});
     case "cat":{const cats=poolCats();
-      if(cats.length>=2)return pickPhase("pickcat",me,sample(cats,3).map(c=>"cat:"+c),15);
-      return pickPhase("pickcat",me,["diff:easy","diff:medium","diff:hard"],15);}
+      if(cats.length>=2)return pickPhase("pickcat",me,sample(cats,3).map(c=>"cat:"+c),10);
+      return pickPhase("pickcat",me,["diff:easy","diff:medium","diff:hard"],10);}
     case "bomb":{const o=alive().filter(p=>p.id!==me).map(p=>p.id);
       if(o.length===1){log(L("{0} passes the bomb to {1} 💣",nm(me),nm(o[0])));return ask({who:o,diff:rd()});}
-      return pickPhase("pick",me,o,15);}
+      return pickPhase("pick",me,o,10);}
     case "curse":{const nx=s.players[nextAlive(s.cur)].id;if(nx!==me){s.cursed[nx]=true;log(L("{0} is cursed 🧿",nm(nx)));}return ask({who:[me],diff:rd()});}
     case "skip":Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3.5,until:now()+3500});return save();
     case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:L("Play reverses direction 🔄"),dur:3.5,until:now()+3500});return save();
@@ -372,7 +375,7 @@ function applyCard(t){
     case "underdog":{const al=alive(),mx=Math.max(...al.map(p=>p.lives)),mn=Math.min(...al.map(p=>p.lives));
       if(pl(me).lives===mn&&mn<mx)log(L("{0} is the underdog 🐶",nm(me))+" "+heal(me));else log(L("{0} isn't the underdog — no bonus",nm(me)));
       return ask({who:[me],diff:"easy"});}
-    case "joker":return pickPhase("joker",me,Object.keys(CARDS).filter(k=>k!=="joker"&&k!=="plain"),20);
+    case "joker":return pickPhase("joker",me,Object.keys(CARDS).filter(k=>k!=="joker"&&k!=="plain"),12);
   }
 }
 function choose(v){
@@ -521,6 +524,9 @@ function soundsFor(S){
     sfx("deal");setTimeout(()=>sfx("flip"),560);setTimeout(()=>sfx("card",fx),1150);
     if(curId()===uid){setTimeout(()=>sfx("turn"),1700);try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}}
   }
+  if(S.phase==="question"&&S.card&&S.card.type==="plain"&&P.cardKey!==SFX.prev.cardKey&&curId()===uid){
+    sfx("turn");try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}
+  }
   if(S.phase==="reveal"&&P.phase!=="reveal"&&S.result){
     const mine=S.result.res&&S.result.res[uid];
     const ok=mine?mine==="right":(S.mode==="single"?S.result.res[S.who[0]]==="right":Object.values(S.result.res||{}).some(r=>r==="right"));
@@ -548,7 +554,10 @@ function leave(){
   try{history.replaceState(null,"",location.pathname);}catch(e){}
   view="home";render();
 }
-const roomLink=()=>location.origin+location.pathname+"?room="+code;
+const sitePath=()=>location.pathname.replace(/index\.html$/,"");
+const roomLink=()=>location.origin+sitePath()+"?room="+code;
+const tvLink=()=>roomLink()+"&tv=1";
+const tvConnected=()=>Object.values(presence||{}).includes("tv");
 function hearts(p){
   if(p.ghost)return "👻"+(p.gp?" "+p.gp:"");
   return "❤️".repeat(p.lives)+"🖤".repeat(Math.max(0,(s.maxLives||p.lives)-p.lives))+(p.shields?" 🛡️"+(p.shields>1?p.shields:""):"");
@@ -637,7 +646,7 @@ function summaryTable(){
 // main play area, shared by phones and the big screen
 function playArea(tv){
   const me=role==="player"?pl(uid):null;
-  const party=s.settings.party&&!tv;
+  const party=s.settings.party&&!tv&&tvConnected();
   let h="";
   const ph=s.phase,cur=curId();
   if(ph==="card"){
@@ -706,7 +715,7 @@ function gameView(){
 
 const muteBtn=(inline)=>`<button class="mute-btn${inline?" inline":""}" data-act="mute" aria-label="${L(SFX.on?"Mute sounds":"Turn sounds on")}">${SFX.on?"🔊":"🔇"}</button>`;
 function tvView(){
-  let h=muteBtn()+`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">${L("Join at {0}",esc(location.host+location.pathname))}<b>${esc(s.code)}</b></div></div>`;
+  let h=muteBtn()+`<div class="tvhead"><h1>Trivia <span>Deck</span></h1><div class="tvcode">${L("Join at {0}",esc(location.host+sitePath()))}<b>${esc(s.code)}</b></div></div>`;
   if(s.status==="lobby"){
     h+=`<div class="box center"><div class="q">${L("Enter the room code on your phone to join")}</div><ul class="plist" style="max-width:520px;margin:0 auto;font-size:26px">${s.players.map(p=>`<li><span>${esc(p.name)}</span><span>${p.id===s.hostId?L("🏠 host"):""}</span></li>`).join("")}</ul><div class="status">${L("Waiting for the host to start…")}</div></div>`;
     return h;
@@ -744,9 +753,10 @@ function lobbyView(){
     h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto"):v}</option>`).join("")}</select></div>
     <div><label>${L("Difficulty")}</label><select id="sdiff">${[["chill","😌 Chill"],["normal","🙂 Normal"],["brainy","🧠 Brainy"]].map(([v,l])=>`<option value="${v}" ${(s.settings.diff||"normal")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
     <div><label>${L("Seconds")}</label><select id="stimer">${[15,20,30].map(v=>`<option ${Number(s.settings.timer)===v?"selected":""}>${v}</option>`).join("")}</select></div></div>
-    <div style="margin-top:12px"><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div>
+    <div class="row" style="margin-top:12px"><div><label>${L("Action cards")}</label><select id="scards">${[["few","🙂 A few"],["some","🃏 Some"],["lots","🌪️ Lots"]].map(([v,l])=>`<option value="${v}" ${(s.settings.cards||"some")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
+    <div><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div></div>
     <label class="toggle"><span>${L("📺 Party mode — questions show on a big screen, phones are buzzers")}</span><input type="checkbox" id="sparty" ${s.settings.party?"checked":""}></label>
-    ${s.settings.party?`<p class="mute small">${L("Open <b>{0}</b> on a TV or laptop, tap “Big screen”, and enter code {1}.",esc(location.host+location.pathname),esc(s.code))}</p>`:""}
+    ${s.settings.party?bigScreenBox():""}
     </div><div class="box"><button data-act="start" ${s.players.length<2?"disabled":""}>${L(s.players.length<2?"Waiting for friends…":"Start game")}</button></div>`;
   }else h+=`${s.settings.party?`<p class="mute small">${L("📺 Party mode is on — questions will show on the big screen.")}</p>`:""}</div><div class="status">${L("Waiting for the host to start…")}</div>`;
   h+=rulesBox();
@@ -755,6 +765,15 @@ function lobbyView(){
   return h;
 }
 
+function bigScreenBox(){
+  const on=tvConnected();
+  return `<div class="bigscreen ${on?"on":""}">
+    <div class="bs-status">${on?L("📺 Big screen connected"):L("📺 No big screen yet — open this link on the TV or laptop:")}</div>
+    ${on?"":`<div class="bs-link" dir="ltr">${esc(tvLink().replace(/^https?:\/\//,""))}</div>
+    <button class="sec" data-act="copytv">${L("Copy big-screen link")}</button>
+    <p class="mute small">${L("Or open {0} there, enter code {1} and tap “Use this device as the big screen”.",`<b dir="ltr">${esc(location.host+sitePath())}</b>`,`<b dir="ltr">${esc(s.code)}</b>`)}</p>`}
+  </div>`;
+}
 function rulesBox(){
   return `<details class="box rules"><summary>${L("How to play & the cards")}</summary>
   <p class="mute small">${L("Before every turn a card is drawn. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins. The first round is all action cards.")}</p>
@@ -766,7 +785,8 @@ function inviteView(){
   return `<div class="langs"><button class="${lang()==="en"?"on":""}" data-act="lang" data-v="en">English</button><button class="${lang()==="he"?"on":""}" data-act="lang" data-v="he">עברית</button></div>
   <h1>Trivia <span>Deck</span></h1><p class="sub">${L("You're invited to room {0}",`<b dir="ltr">${esc(inviteCode)}</b>`)}</p>
   <div class="box"><label>${L("Your name")}</label><input id="pname" maxlength="16" autocomplete="nickname" enterkeyhint="go" placeholder="${L("e.g. Tom")}" value="${esc(ls.get("td_name")||"")}"></div>
-  <div class="box"><button data-act="join">${L("Join")}</button></div>
+  <div class="box"><button data-act="join">${L("Join")}</button>
+  <button class="sec tvbtn" data-act="tv">${L("📺 Use this device as the big screen")}</button></div>
   <div class="center"><button class="link" data-act="leave">${L("Cancel")}</button></div>`;
 }
 function homeView(){
@@ -775,7 +795,7 @@ function homeView(){
   <div class="box"><label>${L("Your name")}</label><input id="pname" maxlength="16" placeholder="${L("e.g. Tom")}" value="${esc(ls.get("td_name")||"")}"></div>
   <div class="box"><button data-act="create">${L("Create a room")}</button></div>
   <div class="box"><label>${L("Join with a code")}</label><div class="row"><input id="jcode" dir="ltr" maxlength="4" placeholder="ABCD" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px"><button class="sec" data-act="join" style="flex:0 0 100px">${L("Join")}</button></div>
-  <button class="link" data-act="tv" style="margin-top:8px">${L("📺 Use this device as the big screen")}</button></div>
+  <button class="sec tvbtn" data-act="tv">${L("📺 Use this device as the big screen")}</button></div>
   ${rulesBox()}`;
 }
 
@@ -801,6 +821,7 @@ function renderInner(){
     if(keep){const el=document.getElementById(keep.id);if(el){el.value=keep.v;el.focus();try{el.setSelectionRange(keep.a,keep.b);}catch(e){}}}
     if(sl)sl.onchange=()=>{s.settings.lives=sl.value;save();};
     if(st)st.onchange=()=>{s.settings.timer=Number(st.value);save();};
+    const sc=document.getElementById("scards");if(sc)sc.onchange=()=>{s.settings.cards=sc.value;save();};
     const sd=document.getElementById("sdiff");if(sd)sd.onchange=()=>{s.settings.diff=sd.value;save();};
     const sg=document.getElementById("slang");if(sg)sg.onchange=()=>{s.settings.lang=sg.value;s.settings.cats=[];s.settings.catNames=[];devLang=sg.value;ls.set("td_lang",sg.value);save();};
     if(sp)sp.onchange=()=>{s.settings.party=sp.checked;save();};
@@ -868,6 +889,7 @@ document.addEventListener("click",async e=>{
   if(act==="rename-cancel"){editingName=false;render();return;}
   if(act==="leave"){leave();return;}
   if(act==="wa"){window.open("https://wa.me/?text="+encodeURIComponent(L("Join my Trivia Deck game! 🃏 {0}",roomLink())),"_blank");return;}
+  if(act==="copytv"){try{await navigator.clipboard.writeText(tvLink());toast(L("Link copied"));}catch(err){toast(tvLink());}return;}
   if(act==="copy"){try{await navigator.clipboard.writeText(roomLink());toast(L("Link copied"));}catch(err){toast(roomLink());}return;}
   if(act==="start"&&isHost){hostStart();return;}
   if(act==="again"&&isHost){backToLobby();return;}
