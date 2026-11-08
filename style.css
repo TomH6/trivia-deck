@@ -488,3 +488,11 @@ body.tv .pl .cx{font-size:2vh}
 body.tv .cardtime{padding:3vh}
 body.tv .ct-title{font-size:6vh}body.tv .ct-sub{font-size:3vh}
 body.tv .ct-ready .av{width:7vh;height:7vh;font-size:3.4vh}
+
+/* no reaction bar any more: the hand strip sits at the very bottom */
+.react{display:none}
+.hand{bottom:0;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+#app{padding-bottom:130px}
+/* leave button at the top, away from the play area */
+.leave-top{width:auto;padding:4px 10px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel2);color:var(--mute);border:1px solid var(--line);margin-inline-end:6px}
+.leave-top.armed{background:var(--red);color:#fff;border-color:var(--red)}

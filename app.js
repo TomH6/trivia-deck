@@ -8,7 +8,7 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=27";
+import { HE } from "./i18n.js?v=28";
 
 // ---------------- Cards ----------------
 const CARDS={
@@ -601,7 +601,7 @@ function turnBanner(){
 }
 function playersBar(){
   const turn=s.status==="playing"?curId():null;
-  return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""} ${muteBtn(true)}</span></div>
+  return `<div class="dir"><span>${s.status==="playing"?`<button class="leave-top ${leaveArm?"armed":""}" data-act="leave-game">${leaveArm?L("Tap again to leave"):L("✕ Leave")}</button> `:s.status==="over"?`<button class="leave-top" data-act="leave">${L("✕ Leave")}</button> `:""}${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""} ${muteBtn(true)}</span></div>
   <div class="players${turn?" playing":""}">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?`<span class="you">${L("you")}</span>`:""}
   ${p.id===turn?'<span class="turnmark">🎯</span>':""}${avatar(p)}<div class="nm">${esc(p.name)}</div><div class="hp">${hearts(p)}</div>${chipExtras(p)}</div>`).join("")}</div>`;
 }
@@ -740,7 +740,7 @@ function playArea(tv){
 }
 
 // ---- the hand of cards (phones) ----
-let sheet=null; // {card, as} while the player is choosing how to play a card
+let sheet=null,leaveArm=false,leaveTimer=null; // {card, as} while the player is choosing how to play a card
 function canPlayNow(){const me=pl(uid);return !!me&&!me.ghost&&s.status==="playing"&&s.phase==="cards"&&curId()===uid&&s.played[uid]!==s.turn;}
 function handBar(){
   const me=pl(uid);if(!me||me.ghost||s.status!=="playing"||(s.phase==="cards"&&curId()===uid))return "";
@@ -780,9 +780,7 @@ function gameView(){
   if(!me&&s.status!=="lobby")h+=`<div class="banner info">${L("This game already started — you're watching. You can join the next one.")}</div>`;
   h+=turnBanner();
   h+=playArea(false);
-  h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
   h+=handBar();
-  if(me)h+=`<div class="react">${EMOJI.map(e=>`<button data-react="${e}">${e}</button>`).join("")}</div>`;
   return h;
 }
 
@@ -970,10 +968,14 @@ document.addEventListener("click",async e=>{
     if(act==="join"&&!typedName())return;
     inviteCode=null;openRoom(c,act==="tv"?"screen":"player");return;
   }
-  if(t.dataset.card){sheet={card:t.dataset.card};render();return;}
+  if(t.dataset.card){const card=t.dataset.card,C=CARDS[card],others=alive().filter(p=>p.id!==uid);
+    if(card!=="joker"&&(C.k!=="target"||others.length===1)){t.disabled=true;send("play",{card,target:C.k==="target"?others[0].id:null});return;}
+    sheet={card};render();return;}
 
   if(act==="sheet-close"){sheet=null;render();return;}
-  if(t.dataset.as&&sheet){sheet.as=t.dataset.as;if(CARDS[sheet.as].k!=="target"){send("play",{card:sheet.card,as:sheet.as});sheet=null;}render();return;}
+  if(t.dataset.as&&sheet){sheet.as=t.dataset.as;const others=alive().filter(p=>p.id!==uid);
+    if(CARDS[sheet.as].k!=="target"||others.length===1){send("play",{card:sheet.card,as:sheet.as,target:CARDS[sheet.as].k==="target"?others[0].id:null});sheet=null;}
+    render();return;}
   if(t.dataset.target&&sheet){send("play",{card:sheet.card,as:sheet.as||null,target:t.dataset.target});sheet=null;render();return;}
   if(t.dataset.play&&sheet){send("play",{card:sheet.card,as:sheet.as||null});sheet=null;render();return;}
   if(act==="rename"){editingName=true;render();const el=document.getElementById("rname");if(el){el.focus();el.select();}return;}
@@ -981,6 +983,8 @@ document.addEventListener("click",async e=>{
     if(!v){toast(L("Enter your name first"));return;}ls.set("td_name",v);editingName=false;send("rename",v);render();return;}
   if(act==="rename-cancel"){editingName=false;render();return;}
   if(act==="leave"){leave();return;}
+  if(act==="leave-game"){if(leaveArm){leaveArm=false;clearTimeout(leaveTimer);leave();return;}
+    leaveArm=true;render();leaveTimer=setTimeout(()=>{leaveArm=false;render();},3000);return;}
   if(act==="wa"){window.open("https://wa.me/?text="+encodeURIComponent(L("Join my Trivia Deck game! 🃏 {0}",roomLink())),"_blank");return;}
   if(act==="copytv"){try{await navigator.clipboard.writeText(tvLink());toast(L("Link copied"));}catch(err){toast(tvLink());}return;}
   if(act==="copy"){try{await navigator.clipboard.writeText(roomLink());toast(L("Link copied"));}catch(err){toast(roomLink());}return;}
