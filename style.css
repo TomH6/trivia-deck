@@ -407,3 +407,53 @@ body.tv .front .oval{width:21vh;height:16vh}
 body.tv .front .big{font-size:9vh}
 body.tv .front .cn{font-size:3.4vh;margin-top:2.4vh}
 body.tv .front .cd{font-size:2vh}
+
+/* ===== hand of cards ===== */
+#app{padding-bottom:200px}
+.hand{position:fixed;left:0;right:0;bottom:64px;z-index:5;padding:8px 10px 4px;background:linear-gradient(transparent,rgba(15,16,36,.96) 30%)}
+.hand-label{text-align:center;font-size:12px;color:var(--mute);margin-bottom:5px}
+.hand-cards{display:flex;justify-content:center;gap:10px}
+.hcard{width:84px;height:104px;padding:6px 4px;border-radius:12px;border:3px solid #fff;background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.35),transparent 55%),var(--c);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-shadow:0 6px 14px rgba(0,0,0,.4);transition:transform .15s}
+.hcard .hi{font-size:30px;background:#fff;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.hcard .hn{font-size:12px;font-weight:700;line-height:1.1;text-align:center;text-shadow:0 1px 0 rgba(0,0,0,.3)}
+.hcard:not(:disabled):active{transform:translateY(-6px) scale(1.04)}
+.hcard:not(:disabled){animation:handin .35s ease-out both}
+.hcard:disabled{filter:grayscale(.7);opacity:.5!important}
+@keyframes handin{from{transform:translateY(20px);opacity:0}}
+/* chips: card count + waiting effects */
+.pl .cx{display:flex;gap:4px;align-items:center;justify-content:center;font-size:11px;color:var(--mute);margin-top:1px}
+.pl .fxi{font-size:12px;letter-spacing:1px}
+/* card sheet */
+.sheet-bg{position:fixed;inset:0;background:rgba(8,8,20,.72);z-index:20;animation:ovin .2s both}
+.sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(520px,100%);max-height:92vh;overflow:auto;z-index:21;background:var(--panel);border-radius:22px 22px 0 0;padding:16px 16px max(18px,env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.5);animation:sheetup .25s ease-out both;text-align:center}
+@keyframes sheetup{from{transform:translate(-50%,40px);opacity:0}}
+.sheet-card{display:flex;justify-content:center;margin:4px 0 12px}
+.sheet-card .card3d{width:150px;height:212px}
+.sheet-card .front .oval{width:104px;height:80px}.sheet-card .front .big{font-size:42px}
+.sheet-card .front .cn{font-size:17px;margin-top:12px}.sheet-card .front .cd{font-size:11px}
+.sheet .picks .av{width:24px;height:24px;font-size:12px;display:inline-flex;vertical-align:middle}
+/* "card played" banner */
+.playtoast{position:fixed;top:max(12px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:12px;width:min(460px,94vw);padding:10px 14px;border-radius:16px;background:rgba(20,21,44,.97);border:2px solid var(--c);box-shadow:0 12px 30px rgba(0,0,0,.5);animation:ptin .35s cubic-bezier(.2,.9,.3,1.2) both}
+.playtoast.out{animation:ptout .35s ease-in both}
+@keyframes ptin{from{transform:translate(-50%,-30px) scale(.9);opacity:0}}
+@keyframes ptout{to{transform:translate(-50%,-30px);opacity:0}}
+.pt-card{flex:0 0 46px;height:62px;border-radius:9px;border:3px solid #fff;background:var(--c);display:flex;align-items:center;justify-content:center;font-size:24px;animation:ptflip .5s ease-out both}
+@keyframes ptflip{from{transform:rotateY(180deg)}}
+.pt-text{font-size:15px;line-height:1.3;text-align:start}
+.pt-d{font-size:12px;color:var(--mute);margin-top:2px}
+body.tv .playtoast{width:min(900px,80vw);padding:16px 22px}
+body.tv .pt-card{flex-basis:80px;height:108px;font-size:44px}
+body.tv .pt-text{font-size:30px}body.tv .pt-d{font-size:20px}
+body.tv .pl .cx{font-size:2vh}
+/* answers removed by a 50/50 played mid-question */
+.opt.cut{opacity:.3!important;text-decoration:line-through}
+@media (prefers-reduced-motion:reduce){.hcard,.playtoast,.pt-card,.sheet{animation:none!important}}
+/* compact hand + reactions so all four answers stay visible */
+.react{padding:6px 10px;gap:5px}
+.react button{width:40px;height:40px;font-size:19px}
+.hand{bottom:52px;padding:4px 10px 2px}
+.hand-label{font-size:11px;margin-bottom:3px}
+.hcard{width:70px;height:80px;border-width:2px;border-radius:10px;gap:3px;padding:4px 3px}
+.hcard .hi{width:34px;height:34px;font-size:21px}
+.hcard .hn{font-size:10.5px}
+#app{padding-bottom:170px}

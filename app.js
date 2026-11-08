@@ -8,24 +8,27 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=22";
+import { HE } from "./i18n.js?v=24";
 
 // ---------------- Cards ----------------
 const CARDS={
- plain:{name:"Answer",ic:"❓",c:"var(--grey)",d:"Answer one question.",n:9},
- fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Two wrong answers are removed.",n:2},
- cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"You choose the category.",n:3},
- shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Answer right to earn a shield that blocks one lost life.",n:2},
- double:{name:"Double Trouble",ic:"✌️",c:"var(--yellow)",d:"Answer 2 questions. Miss either and lose a life.",n:4},
- hard:{name:"Hard Mode",ic:"🔥",c:"var(--yellow)",d:"A hard question. Right = win back a lost life.",n:3},
- speed:{name:"Speed Round",ic:"⚡",c:"var(--yellow)",d:"Only 7 seconds to answer.",n:3},
- bomb:{name:"Pass the Bomb",ic:"💣",c:"var(--red)",d:"Pick who has to answer your question.",n:3},
- curse:{name:"Curse",ic:"🧿",c:"var(--red)",d:"The next player gets a harder question. Then you answer.",n:2},
- sudden:{name:"Sudden Death",ic:"💀",c:"var(--red)",d:"Everyone answers. Wrong = lose a life.",n:1},
- skip:{name:"Skip",ic:"⏭️",c:"var(--blue)",d:"Your turn is skipped.",n:2},
- buzzer:{name:"Buzzer Round",ic:"🔔",c:"var(--purple)",d:"Everyone answers. Fastest right answer wins back a life.",n:2},
- joker:{name:"Joker",ic:"🃏",c:"var(--purple)",d:"Choose any card you like.",n:1},
+ // k: who a card affects — self, target (pick a player), all (everyone answers next), joker. n: how common it is in the draw pile.
+ plain:{name:"Answer",ic:"❓",c:"var(--grey)",d:"Answer one question.",n:0,k:"none"},
+ fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Remove two wrong answers from your question.",n:3,k:"self"},
+ shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Blocks the next life you would lose.",n:3,k:"self"},
+ cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"Choose the category of your next question.",n:2,k:"self"},
+ hard:{name:"Hard Mode",ic:"🔥",c:"var(--yellow)",d:"Your next question is hard. Get it right to win back a life.",n:2,k:"self"},
+ skip:{name:"Skip",ic:"⏭️",c:"var(--blue)",d:"Skip your next turn.",n:1,k:"self"},
+ bomb:{name:"Pass the Bomb",ic:"💣",c:"var(--red)",d:"Pass your question to another player.",n:3,k:"target"},
+ double:{name:"Double Trouble",ic:"✌️",c:"var(--yellow)",d:"Pick a player: their next turn is 2 questions.",n:2,k:"target"},
+ speed:{name:"Speed Round",ic:"⚡",c:"var(--yellow)",d:"Pick a player: only 7 seconds on their next question.",n:2,k:"target"},
+ curse:{name:"Curse",ic:"🧿",c:"var(--red)",d:"Pick a player: their next question is harder.",n:2,k:"target"},
+ buzzer:{name:"Buzzer Round",ic:"🔔",c:"var(--purple)",d:"Everyone answers next. Fastest right answer wins back a life.",n:2,k:"all"},
+ sudden:{name:"Sudden Death",ic:"💀",c:"var(--red)",d:"Everyone answers next. Wrong = lose a life.",n:1,k:"all"},
+ joker:{name:"Joker",ic:"🃏",c:"var(--purple)",d:"Becomes any card you want.",n:1,k:"joker"},
 };
+const START_HAND=2,HAND_MAX=3;
+const FX_ICON={fifty:"✂️",cat:"🎯",hard:"🔥",skip:"⏭️",bomb:"💣",double:"✌️",speed:"⚡"};
 const EMOJI=["😂","😱","🔥","👏","😈","💀"];
 const LETTERS="ABCD";
 const GRACE=1500;          // ms the host waits past a deadline for answers still in flight
@@ -147,7 +150,10 @@ function normalize(x){
   if(!x)return x;
   x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0},p));
   for(const k of ["log","reactions","deck","who","queue","ghostWho"])x[k]=arr(x[k]);
-  for(const k of ["answers","cursed","ghostAns"])x[k]=x[k]||{};
+  for(const k of ["answers","cursed","ghostAns","fx","played"])x[k]=x[k]||{};
+  x.hands=Object.fromEntries(Object.entries(x.hands||{}).map(([k,v])=>[k,arr(v)]));
+  x.pendingAll=arr(x.pendingAll);
+  if(x.q)x.q.cut=arr(x.q.cut);
   x.settings=Object.assign({lives:"auto",timer:20,cats:[],catNames:[],party:false,diff:"normal",lang:"en",cards:"some"},x.settings||{});
   x.settings.cats=arr(x.settings.cats);x.settings.catNames=arr(x.settings.catNames);
   if(x.q)x.q.opts=arr(x.q.opts);
@@ -273,13 +279,12 @@ async function createRoom(){
 
 // ---------------- host: game logic ----------------
 function log(t){s.log=(s.log||[]).slice(-6).concat([t]);}
-const CARD_MIX={few:.8,some:.65,lots:.19}; // share of turns that are a plain question
-function buildDeck(){
-  const share=CARD_MIX[(s&&s.settings&&s.settings.cards)||"some"]||CARD_MIX.some;
-  const d=[];for(const k in CARDS)if(k!=="plain")for(let i=0;i<CARDS[k].n;i++)d.push(k);
-  const plain=Math.round(d.length*share/(1-share));for(let i=0;i<plain;i++)d.push("plain");
-  return shuffle(d);
-}
+// draw pile: action cards only, weighted by n
+function buildDeck(){const d=[];for(const k in CARDS)for(let i=0;i<CARDS[k].n;i++)d.push(k);return shuffle(d);}
+function draw(){if(!s.deck.length)s.deck=buildDeck();return s.deck.pop();}
+const fx=id=>(s.fx[id]=s.fx[id]||{});
+// after every full round, everyone still in draws one card (hand max 3)
+function deal(n){for(const p of alive()){const h=s.hands[p.id]=(s.hands[p.id]||[]);for(let k=0;k<n&&h.length<HAND_MAX;k++)h.push(draw());}}
 
 function handle(inp){
   if(!s||!inp)return;
@@ -308,11 +313,12 @@ function handle(inp){
     const limit=s.dur*1000+300;
     const rt=isFinite(o.rt)?Math.max(0,Number(o.rt)):now()-(s.until-s.dur*1000);
     if(rt>limit)return;
-    const c=Number(o.c);s.answers[id]={c,t:rt};
-    if(s.mode==="buzzer"&&c===s.q.correct&&!P.ghost&&s.who.filter(w=>!pl(w).ghost).every(w=>s.answers[w])){resolve();return;}
+    const c=Number(o.c);if((s.q.cut||[]).includes(c))return;
+    s.answers[id]={c,t:rt};
     if(s.who.every(w=>s.answers[w]))resolve();else save();
     return;
   }
+  if(kind==="play"){playCard(P,v);return;}
   if(kind==="pick"){if(s.chooser===id)choose(v);}
   if(kind==="haunt"){
     const T=pl(v);if(!P.ghost||!(P.haunts>0)||!T||T.ghost)return;
@@ -320,71 +326,76 @@ function handle(inp){
   }
 }
 
+// a player plays a card from their hand (any time, one card per turn)
+function playCard(P,v){
+  if(!v||P.ghost)return;
+  const hand=s.hands[P.id]||[],idx=hand.indexOf(v.card);if(idx<0)return;
+  if(s.played[P.id]===s.turn)return;
+  let type=v.card;const joker=type==="joker";
+  if(joker){if(!CARDS[v.as]||["joker","plain"].includes(v.as))return;type=v.as;}
+  const C=CARDS[type];let target=null;
+  if(C.k==="target"){target=v.target;const T=pl(target);if(!T||T.ghost||T.id===P.id)return;}
+  // is it this player's question right now (and not answered yet)?
+  const live=s.phase==="question"&&s.mode==="single"&&s.who[0]===P.id&&!s.answers[P.id];
+  let now_=false;
+  switch(type){
+    case "fifty":if(live&&!(s.q.cut||[]).length&&s.q.opts.length>2){s.q.cut=sample(s.q.opts.map((o,i)=>i).filter(i=>i!==s.q.correct),2);now_=true;}else fx(P.id).fifty=true;break;
+    case "shield":P.shields++;now_=true;break;
+    case "cat":fx(P.id).cat=true;break;
+    case "hard":fx(P.id).hard=true;break;
+    case "skip":fx(P.id).skip=true;break;
+    case "bomb":if(live){s.who=[target];s.answers={};s.until=now()+s.dur*1000+600;now_=true;}else fx(P.id).bomb=target;break;
+    case "double":fx(target).double=true;break;
+    case "speed":fx(target).speed=true;break;
+    case "curse":s.cursed[target]=true;break;
+    case "buzzer":case "sudden":s.pendingAll.push(type);break;
+  }
+  hand.splice(idx,1);s.hands[P.id]=hand;s.played[P.id]=s.turn;
+  s.lastPlay={id:Math.random().toString(36).slice(2,9),by:P.id,card:type,target,joker,now:now_};
+  log(target?L("{0} played {1} on {2}",P.name,C.ic+" "+L(C.name),nm(target)):L("{0} played {1}",P.name,C.ic+" "+L(C.name)));
+  save();
+}
+
 async function hostStart(){
   const n=s.players.length;if(n<2)return;
   s.status="starting";save();
   await preparePool(s.settings.cats);
   const LV=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
-  Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,
-    firstLeft:s.settings.cards==="lots"?n:0,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
+  Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,roundCount:0,
+    hands:{},fx:{},played:{},pendingAll:[],lastPlay:null,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
   s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0}));
+  deal(START_HAND);
   startTurn();
 }
-function backToLobby(){Object.assign(s,{status:"lobby",phase:null,q:null,card:null});log(L("Back to the lobby"));save();}
+function backToLobby(){Object.assign(s,{status:"lobby",phase:null,q:null,card:null,hands:{},fx:{},lastPlay:null});log(L("Back to the lobby"));save();}
 
-function draw(forced){
-  if(!s.deck.length)s.deck=buildDeck();
-  if(forced){const i=s.deck.findIndex(c=>c!=="plain"&&c!=="skip");if(i>=0)return s.deck.splice(i,1)[0];}
-  return s.deck.pop();
-}
 function startTurn(){
-  s.turn++;const forced=s.firstLeft>0;if(forced)s.firstLeft--;
-  const t=draw(forced);
-  Object.assign(s,{card:{type:t},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,
-    phase:"card",dur:5,until:now()+5000});
-  log(L("{0} drew {1}",nm(curId()),CARDS[t].ic+" "+L(CARDS[t].name)));
-  if(t==="plain"){applyCard("plain");return;} // nothing to read: straight to the question
-  save();
+  s.turn++;s.roundCount=(s.roundCount||0)+1;
+  if(s.roundCount>alive().length){s.roundCount=1;deal(1);log(L("🃏 New round — everyone draws a card"));}
+  const me=curId(),f=s.fx[me]||{};
+  Object.assign(s,{card:{type:"plain"},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null});
+  if(f.skip){delete f.skip;s.card={type:"skip"};Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3,until:now()+3000});return save();}
+  if(f.bomb){const t=f.bomb;delete f.bomb;if(pl(t)&&!pl(t).ghost){s.card={type:"bomb"};log(L("{0} passes the bomb to {1} 💣",nm(me),nm(t)));return ask({who:[t],diff:rd()});}}
+  if(f.cat){delete f.cat;s.card={type:"cat"};const cats=poolCats();
+    return pickPhase("pickcat",me,cats.length>=2?sample(cats,3).map(c=>"cat:"+c):["diff:easy","diff:medium","diff:hard"],10);}
+  askTurn({who:[me],diff:rd()});
+}
+// the turn player's question, with the effects waiting on them
+function askTurn(item){
+  const me=item.who[0],f=s.fx[me]||{};
+  if(f.hard){delete f.hard;item.diff="hard";item.reward="heal";s.card={type:"hard"};}
+  if(f.fifty){delete f.fifty;item.fifty=true;if(s.card.type==="plain")s.card={type:"fifty"};}
+  if(f.speed){delete f.speed;item.time=7;s.card={type:"speed"};}
+  if(f.double){delete f.double;s.chain="double";s.queue=[{who:[me],diff:rd()}];s.card={type:"double"};}
+  ask(item);
 }
 function pickPhase(phase,chooser,options,secs){Object.assign(s,{phase,chooser,options,dur:secs,until:now()+secs*1000});save();}
-
-function applyCard(t){
-  const me=curId();
-  switch(t){
-    case "plain":return ask({who:[me],diff:rd()});
-    case "easy":return ask({who:[me],diff:"easy"});
-    case "double":s.chain="double";s.queue=[{who:[me],diff:rd()}];return ask({who:[me],diff:rd()});
-    case "hard":return ask({who:[me],diff:"hard",reward:"heal"});
-    case "speed":return ask({who:[me],diff:rd(),time:7});
-    case "fifty":return ask({who:[me],diff:rd(),fifty:true});
-    case "allin":s.chain="allin";s.queue=[{who:[me],diff:rd(),lose:2},{who:[me],diff:rd(),lose:2}];return ask({who:[me],diff:rd(),lose:2});
-    case "cat":{const cats=poolCats();
-      if(cats.length>=2)return pickPhase("pickcat",me,sample(cats,3).map(c=>"cat:"+c),10);
-      return pickPhase("pickcat",me,["diff:easy","diff:medium","diff:hard"],10);}
-    case "bomb":{const o=alive().filter(p=>p.id!==me).map(p=>p.id);
-      if(o.length===1){log(L("{0} passes the bomb to {1} 💣",nm(me),nm(o[0])));return ask({who:o,diff:rd()});}
-      return pickPhase("pick",me,o,10);}
-    case "curse":{const nx=s.players[nextAlive(s.cur)].id;if(nx!==me){s.cursed[nx]=true;log(L("{0} is cursed 🧿",nm(nx)));}return ask({who:[me],diff:rd()});}
-    case "skip":Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3.5,until:now()+3500});return save();
-    case "reverse":s.dir*=-1;Object.assign(s,{phase:"info",info:L("Play reverses direction 🔄"),dur:3.5,until:now()+3500});return save();
-    case "jump":s.extraSkip=1;return ask({who:[me],diff:rd()});
-    case "buzzer":return ask({who:s.players.map(p=>p.id),diff:rd(),mode:"buzzer"});
-    case "sudden":return ask({who:alive().map(p=>p.id),diff:rd(),mode:"sudden"});
-    case "safe":s.safeLeft=alive().length;return ask({who:[me],diff:rd()});
-    case "shield":return ask({who:[me],diff:rd(),reward:"shield"});
-    case "underdog":{const al=alive(),mx=Math.max(...al.map(p=>p.lives)),mn=Math.min(...al.map(p=>p.lives));
-      if(pl(me).lives===mn&&mn<mx)log(L("{0} is the underdog 🐶",nm(me))+" "+heal(me));else log(L("{0} isn't the underdog — no bonus",nm(me)));
-      return ask({who:[me],diff:"easy"});}
-    case "joker":return pickPhase("joker",me,Object.keys(CARDS).filter(k=>k!=="joker"&&k!=="plain"),12);
-  }
-}
 function choose(v){
   const pick=s.options&&s.options.includes(v)?v:rand(s.options);
-  if(s.phase==="pick"){log(L("{0} passes the bomb to {1} 💣",nm(s.chooser),nm(pick)));ask({who:[pick],diff:rd()});}
-  else if(s.phase==="pickcat"){
+  if(s.phase==="pickcat"){
     const [k,val]=pick.split(/:(.*)/s);log(L("{0} picks {1}",nm(s.chooser),k==="cat"?val:L(val)+" "+L("difficulty")));
-    ask(k==="cat"?{who:[curId()],diff:rd(),cat:val}:{who:[curId()],diff:val});
-  }else if(s.phase==="joker"){log(L("{0} plays the Joker as {1}",nm(s.chooser),L(CARDS[pick].name)));s.card={type:pick,joker:true};s.chooser=null;s.options=null;applyCard(pick);}
+    askTurn(k==="cat"?{who:[curId()],diff:rd(),cat:val}:{who:[curId()],diff:val});
+  }
 }
 function ask(item){
   let diff=item.diff;
@@ -394,17 +405,17 @@ function ask(item){
   let opts=item.fifty?[Q.a,rand(Q.w)]:[Q.a,...Q.w];shuffle(opts);
   const secs=item.time||Number(s.settings.timer)||20;
   s.qn=(s.qn||0)+1;
-  Object.assign(s,{q:{i:s.qn,text:Q.text,cat:Q.cat,diff:Q.diff,opts,correct:opts.indexOf(Q.a)},who:item.who,mode:item.mode||"single",item,
+  Object.assign(s,{q:{i:s.qn,text:Q.text,cat:Q.cat,diff:Q.diff,opts,correct:opts.indexOf(Q.a),cut:[]},who:item.who,mode:item.mode||"single",item,
     answers:{},result:null,chooser:null,options:null,phase:"question",dur:secs,until:now()+secs*1000+600,
     ghostWho:(item.mode==="buzzer")?[]:s.players.filter(p=>p.ghost).map(p=>p.id),ghostAns:{}});
   save();
 }
 function ghostScore(id){const p=pl(id);p.gp++;if(p.gp%3===0){p.haunts=(p.haunts||0)+1;return " "+L("(+1 haunt 🧿)");}return "";}
 function lose(id,n){
-  const p=pl(id);if(s.safeLeft>0)return L("(Safe Round — no damage 🕊️)");
+  const p=pl(id);
   const out=[];
   for(let k=0;k<n&&p.lives>0;k++){if(p.shields>0){p.shields--;out.push(L("🛡️ blocked"));}else{p.lives--;out.push(L("−1 ❤️"));}}
-  if(p.lives<=0&&!p.ghost){p.ghost=true;out.push(L("— OUT 👻"));}
+  if(p.lives<=0&&!p.ghost){p.ghost=true;s.hands[id]=[];delete s.fx[id];delete s.cursed[id];out.push(L("— OUT 👻"));}
   return out.join(" ");
 }
 function heal(id){const p=pl(id);if(p.ghost)return "";if(p.lives<s.maxLives){p.lives++;return "+1 ❤️";}return L("(already full)");}
@@ -413,7 +424,7 @@ function resolve(){
   for(const id of s.who){const a=s.answers[id];res[id]=a?(a.c===q.correct?"right":"wrong"):"timeout";}
   if(s.mode==="single"){
     const id=s.who[0];const ok=res[id]==="right";s.lastOk=ok;
-    if(ok){text=L("{0} got it ✅",nm(id));if(it.reward==="heal")text+=" "+heal(id);if(it.reward==="shield"){pl(id).shields++;text+=" "+L("+1 shield 🛡️");}}
+    if(ok){text=L("{0} got it ✅",nm(id));if(it.reward==="heal")text+=" "+heal(id);}
     else text=(res[id]==="timeout"?L("{0} ran out of time ⏰",nm(id)):L("{0} got it wrong ❌",nm(id)))+" "+lose(id,it.lose||1);
   }else if(s.mode==="buzzer"){
     const rights=Object.entries(s.answers).filter(([,a])=>a.c===q.correct).sort((a,b)=>a[1].t-b[1].t);
@@ -422,10 +433,10 @@ function resolve(){
     text=first?L("{0} was fastest 🔔",nm(first[0]))+" "+heal(first[0]):L("Nobody got it 🤷");
     if(g.length)text+=" · "+L("👻 point for {0}",g.join(", "));
   }else{
-    const before=JSON.parse(JSON.stringify(s.players));
+    const before=JSON.parse(JSON.stringify(s.players)),beforeHands=JSON.parse(JSON.stringify(s.hands));
     const losers=s.who.filter(id=>res[id]!=="right");
     const parts=losers.map(id=>nm(id)+" "+lose(id,1));
-    if(alive().length===0){s.players=before;text=L("Everyone would be out — you all survive! 😮‍💨");}
+    if(alive().length===0){s.players=before;s.hands=beforeHands;text=L("Everyone would be out — you all survive! 😮‍💨");}
     else text=losers.length?parts.join(" · "):L("Everyone survived 😮‍💨");
   }
   const gr=Object.entries(s.ghostAns).filter(([,a])=>a.c===q.correct).map(([id])=>nm(id)+ghostScore(id));
@@ -440,28 +451,23 @@ function afterReveal(){
     if(s.lastOk&&!pl(curId()).ghost){ask(s.queue.shift());return;}
     s.queue=[];s.chainFail=true;
   }
-  if(s.chain==="allin"&&s.lastOk&&!s.chainFail){
-    const t=L("{0} survived All In! 🎰",nm(curId()))+" "+heal(curId());log(t);
-    s.chain=null;Object.assign(s,{phase:"info",info:t,dur:3.5,until:now()+3500});save();return;
-  }
   endTurn();
 }
 function nextAlive(c){const n=s.players.length;for(let k=1;k<=n;k++){const j=((c+s.dir*k)%n+n)%n;if(!s.players[j].ghost)return j;}return c;}
 function endTurn(){
   const al=alive();
   if(al.length<=1){s.status="over";s.phase="over";s.winner=al[0]?al[0].id:null;log(L("🏆 {0} wins!",al[0]?al[0].name:L("Nobody")));save();return;}
-  if(s.safeLeft>0)s.safeLeft--;
-  const steps=1+(s.extraSkip||0);s.extraSkip=0;
-  let c=s.cur;for(let k=0;k<steps;k++)c=nextAlive(c);
-  s.cur=c;startTurn();
+  // Buzzer Round / Sudden Death cards play out between turns
+  if(s.pendingAll.length){const t=s.pendingAll.shift();s.card={type:t};s.queue=[];s.chain=null;
+    return ask({who:t==="buzzer"?s.players.map(p=>p.id):al.map(p=>p.id),diff:rd(),mode:t});}
+  s.cur=nextAlive(s.cur);startTurn();
 }
 function tick(){
   if(!s||s.status!=="playing")return;
   const n=now();if(n<s.until+(s.phase==="question"?GRACE:0))return;
-  if(s.phase==="card")applyCard(s.card.type);
-  else if(s.phase==="question")resolve();
+  if(s.phase==="question")resolve();
   else if(s.phase==="reveal")afterReveal();
-  else if(s.phase==="pick"||s.phase==="pickcat"||s.phase==="joker")choose(null);
+  else if(s.phase==="pickcat")choose(null);
   else if(s.phase==="info")endTurn();
 }
 
@@ -517,14 +523,15 @@ function sfx(name,arg){
 function soundsFor(S){
   const P=SFX.prev;SFX.prev={key:S.status+":"+S.turn+":"+(S.card&&S.card.type)+":"+S.phase+":"+(S.q&&S.q.i),
     phase:S.phase,status:S.status,lives:Object.fromEntries(S.players.map(p=>[p.id,p.lives])),ghosts:S.players.filter(p=>p.ghost).map(p=>p.id),
-    cursed:Object.keys(S.cursed||{}).length,cardKey:S.turn+":"+(S.card&&S.card.type)};
+    cursed:Object.keys(S.cursed||{}).length,cardKey:S.turn+":"+(S.card&&S.card.type),turn:S.turn,hand:((S.hands||{})[uid]||[]).length};
+  if(P&&SFX.prev.hand>P.hand&&S.status==="playing")sfx("deal");
   if(!P||P.key===SFX.prev.key&&P.cursed===SFX.prev.cursed)return;
   if(S.status==="playing"&&S.phase==="card"&&P.cardKey!==SFX.prev.cardKey){
     const fx=FXC[CARDS[S.card.type].c]||"grey";
     sfx("deal");setTimeout(()=>sfx("flip"),560);setTimeout(()=>sfx("card",fx),1150);
     if(curId()===uid){setTimeout(()=>sfx("turn"),1700);try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}}
   }
-  if(S.phase==="question"&&S.card&&S.card.type==="plain"&&P.cardKey!==SFX.prev.cardKey&&curId()===uid){
+  if(S.status==="playing"&&P.turn!==S.turn&&curId()===uid&&S.phase!=="info"){
     sfx("turn");try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}
   }
   if(S.phase==="reveal"&&P.phase!=="reveal"&&S.result){
@@ -576,7 +583,14 @@ function playersBar(){
   const turn=s.status==="playing"?curId():null;
   return `<div class="dir"><span>${L("Room")} ${esc(s.code)}${Object.values(presence).includes("tv")?" · 📺":""}</span><span>${s.status==="playing"?(s.dir===1?L("Order ➡️"):L("Order ⬅️ (reversed)"))+(s.safeLeft>0?L(" · 🕊️ safe"):""):""} ${muteBtn(true)}</span></div>
   <div class="players${turn?" playing":""}">${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""} ${online(p.id)?"":"off"}">${p.id===uid?`<span class="you">${L("you")}</span>`:""}
-  ${p.id===turn?'<span class="turnmark">🎯</span>':""}${avatar(p)}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div>`;
+  ${p.id===turn?'<span class="turnmark">🎯</span>':""}${avatar(p)}<div class="nm">${esc(p.name)}</div><div class="hp">${hearts(p)}</div>${chipExtras(p)}</div>`).join("")}</div>`;
+}
+// small line under a player: cards in hand and effects waiting for them
+function chipExtras(p){
+  if(s.status!=="playing"||p.ghost)return "";
+  const n=(s.hands&&s.hands[p.id]||[]).length,f=s.fx&&s.fx[p.id]||{};
+  const icons=Object.keys(f).filter(k=>f[k]&&FX_ICON[k]).map(k=>FX_ICON[k]).join("")+(s.cursed&&s.cursed[p.id]?"🧿":"");
+  return `<div class="cx"><span class="cnt">🃏${n}</span>${icons?`<span class="fxi">${icons}</span>`:""}</div>`;
 }
 const FXC={"var(--red)":"red","var(--blue)":"blue","var(--yellow)":"yellow","var(--green)":"green","var(--purple)":"purple","var(--grey)":"grey"};
 const HEX={red:"#ff5a5f",blue:"#3d8bff",yellow:"#ffc531",green:"#2ecc71",purple:"#a66bff",grey:"#c9c6e6"};
@@ -672,7 +686,8 @@ function playArea(tv){
     if(rev){const rs=s.result&&s.result.res||{},mine=rs[uid],good=mine?mine==="right":(s.mode==="single"?rs[s.who[0]]==="right":Object.values(rs).some(r=>r==="right"));
       h+=`<div class="result ${good?"good":"bad"}">${esc(s.result?s.result.text:"")}</div>`;}
     h+=`<div class="opts">${q.opts.map((o,i)=>{
-      let cls="opt l"+i,mark="";
+      let cls="opt l"+i,mark="";const cut=(q.cut||[]).includes(i);
+      if(cut&&!rev)return `<button class="opt l${i} cut" disabled><span class="lt">${letters()[i]}</span><span class="ot">${esc(o)}</span><span class="mk">✂️</span></button>`;
       if(rev&&i===q.correct){cls+=" right";mark="✓";}
       else if(rev&&Object.values(s.answers).some(a=>a.c===i)){cls+=" wrong";mark="✗";}
       else if(rev)cls+=" faded";
@@ -698,6 +713,31 @@ function playArea(tv){
   return h;
 }
 
+// ---- the hand of cards (phones) ----
+let sheet=null; // {card, as} while the player is choosing how to play a card
+function canPlayNow(){const me=pl(uid);return !!me&&!me.ghost&&s.status==="playing"&&s.played[uid]!==s.turn;}
+function handBar(){
+  const me=pl(uid);if(!me||me.ghost||s.status!=="playing")return "";
+  const hand=s.hands[uid]||[],ok=canPlayNow();
+  return `<div class="hand">
+    <div class="hand-label">${hand.length?(ok?L("Your cards — tap to play"):L("You played a card this turn")):L("No cards — you draw one each round")}</div>
+    <div class="hand-cards">${hand.map(t=>{const C=CARDS[t];return `<button class="hcard" data-card="${t}" style="--c:${C.c}" ${ok?"":"disabled"}><span class="hi">${C.ic}</span><span class="hn">${esc(L(C.name))}</span></button>`;}).join("")}</div>
+  </div>`;
+}
+function sheetView(){
+  if(!sheet||!s||s.status!=="playing"||!canPlayNow()||!(s.hands[uid]||[]).includes(sheet.card)){sheet=null;return "";}
+  const type=sheet.as||sheet.card,C=CARDS[type];
+  let body="";
+  if(sheet.card==="joker"&&!sheet.as){
+    body=`<p class="mute">${L("Pick the card your Joker becomes:")}</p><div class="picks">${Object.keys(CARDS).filter(k=>k!=="joker"&&k!=="plain").map(k=>`<button class="sec" data-as="${k}">${CARDS[k].ic} ${esc(L(CARDS[k].name))}</button>`).join("")}</div>`;
+  }else if(C.k==="target"){
+    const others=alive().filter(p=>p.id!==uid);
+    body=`<p class="mute">${L("Who gets it?")}</p><div class="picks">${others.map(p=>`<button class="sec" data-target="${esc(p.id)}">${avatar(p)} ${esc(p.name)}</button>`).join("")}</div>`;
+  }else body=`<button data-play="1">${L("Play {0}",C.ic+" "+esc(L(C.name)))}</button>`;
+  return `<div class="sheet-bg" data-act="sheet-close"></div><div class="sheet" style="--c:${C.c}">
+    <div class="sheet-card">${cardHTML(type,false)}</div>${body}
+    <button class="link" data-act="sheet-close">${L("Cancel")}</button></div>`;
+}
 function gameView(){
   const me=pl(uid);
   let h=playersBar();
@@ -709,6 +749,7 @@ function gameView(){
   h+=turnBanner();
   h+=playArea(false);
   h+=`<div class="center"><button class="link" data-act="leave">${L("Leave room")}</button></div>`;
+  h+=handBar();
   if(me)h+=`<div class="react">${EMOJI.map(e=>`<button data-react="${e}">${e}</button>`).join("")}</div>`;
   return h;
 }
@@ -723,7 +764,7 @@ function tvView(){
   const turn=s.status==="playing"?curId():null;
   h+=`<div class="tvgrid"><div>${turnBanner()}${playArea(true)}</div><div class="side${turn?" playing":""}">
     <div class="dir" style="font-size:18px"><span>${s.dir===1?L("Order ➡️"):L("Order ⬅️")}</span><span>${s.safeLeft>0?L("🕊️ safe round"):""}</span></div>
-    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}">${avatar(p)}<div class="nm">${esc(p.name)}${s.cursed&&s.cursed[p.id]?" 🧿":""}</div><div class="hp">${hearts(p)}</div></div>`).join("")}</div></div>`;
+    ${s.players.map(p=>`<div class="pl ${p.id===turn?"turn":""} ${p.ghost?"ghost":""}">${avatar(p)}<div class="nm">${esc(p.name)}</div><div class="hp">${hearts(p)}</div>${chipExtras(p)}</div>`).join("")}</div></div>`;
   return h;
 }
 
@@ -753,8 +794,7 @@ function lobbyView(){
     h+=`<div class="row" style="margin-top:14px"><div><label>${L("Lives")}</label><select id="slives">${["auto","2","3","4","5"].map(v=>`<option value="${v}" ${String(s.settings.lives)===v?"selected":""}>${v==="auto"?L("Auto"):v}</option>`).join("")}</select></div>
     <div><label>${L("Difficulty")}</label><select id="sdiff">${[["chill","😌 Chill"],["normal","🙂 Normal"],["brainy","🧠 Brainy"]].map(([v,l])=>`<option value="${v}" ${(s.settings.diff||"normal")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
     <div><label>${L("Seconds")}</label><select id="stimer">${[15,20,30].map(v=>`<option ${Number(s.settings.timer)===v?"selected":""}>${v}</option>`).join("")}</select></div></div>
-    <div class="row" style="margin-top:12px"><div><label>${L("Action cards")}</label><select id="scards">${[["few","🙂 A few"],["some","🃏 Some"],["lots","🌪️ Lots"]].map(([v,l])=>`<option value="${v}" ${(s.settings.cards||"some")===v?"selected":""}>${L(l)}</option>`).join("")}</select></div>
-    <div><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div></div>
+    <div class="row" style="margin-top:12px"><div><label>${L("Language")}</label><select id="slang"><option value="en" ${lang()==="en"?"selected":""}>English</option><option value="he" ${lang()==="he"?"selected":""}>עברית</option></select></div></div>
     <label class="toggle"><span>${L("📺 Party mode — questions show on a big screen, phones are buzzers")}</span><input type="checkbox" id="sparty" ${s.settings.party?"checked":""}></label>
     ${s.settings.party?bigScreenBox():""}
     </div><div class="box"><button data-act="start" ${s.players.length<2?"disabled":""}>${L(s.players.length<2?"Waiting for friends…":"Start game")}</button></div>`;
@@ -776,8 +816,8 @@ function bigScreenBox(){
 }
 function rulesBox(){
   return `<details class="box rules"><summary>${L("How to play & the cards")}</summary>
-  <p class="mute small">${L("Before every turn a card is drawn. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins. The first round is all action cards.")}</p>
-  <table>${Object.values(CARDS).map(c=>`<tr><td>${c.ic}</td><td><b>${esc(L(c.name))}</b> <span class="mute">×${c.n}</span><br><span class="mute">${esc(L(c.d))}</span></td></tr>`).join("")}</table>
+  <p class="mute small">${L("Everyone starts with 2 cards and draws one more after each full round (up to 3). Play a card whenever you like — one per turn — to help yourself, hit another player, or make everyone answer. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins.")}</p>
+  <table>${Object.values(CARDS).filter(c=>c.n>0).map(c=>`<tr><td>${c.ic}</td><td><b>${esc(L(c.name))}</b><br><span class="mute">${esc(L(c.d))}</span></td></tr>`).join("")}</table>
   <p class="mute small">Questions from the <a href="https://opentdb.com" style="color:inherit">Open Trivia Database</a> (CC BY-SA 4.0).</p></details>`;
 }
 
@@ -816,7 +856,7 @@ function renderInner(){
   if(view==="game"&&s){
     const ae=document.activeElement,keep=ae&&ae.id&&ae.tagName==="INPUT"?{id:ae.id,v:ae.value,a:ae.selectionStart,b:ae.selectionEnd}:null;
     if(role==="screen")app.innerHTML=tvView();
-    else app.innerHTML=s.status==="lobby"?lobbyView():gameView();
+    else app.innerHTML=(s.status==="lobby"?lobbyView():gameView())+sheetView();
     const sl=document.getElementById("slives"),st=document.getElementById("stimer"),sp=document.getElementById("sparty");
     if(keep){const el=document.getElementById(keep.id);if(el){el.value=keep.v;el.focus();try{el.setSelectionRange(keep.a,keep.b);}catch(e){}}}
     if(sl)sl.onchange=()=>{s.settings.lives=sl.value;save();};
@@ -826,11 +866,25 @@ function renderInner(){
     const sg=document.getElementById("slang");if(sg)sg.onchange=()=>{s.settings.lang=sg.value;s.settings.cats=[];s.settings.catNames=[];devLang=sg.value;ls.set("td_lang",sg.value);save();};
     if(sp)sp.onchange=()=>{s.settings.party=sp.checked;save();};
     if(isHost&&s.status==="lobby"&&!catsCache&&!catsLoading){catsLoading=true;loadCats().then(c=>{catsCache=c;render();});}
-    if(s.phase==="question"&&s.q){const k=s.turn+":"+s.q.i;if(qSeenKey!==k){qSeenKey=k;qSeenAt=Date.now();}}
+    if(s.phase==="question"&&s.q){const k=s.turn+":"+s.q.i+":"+s.who.join(",");if(qSeenKey!==k){qSeenKey=k;qSeenAt=Date.now();}}
     soundsFor(s);
     syncOverlay();
-    spawnReacts();updateTimer();
+    showPlay();spawnReacts();updateTimer();
   }
+}
+let seenPlay; // undefined until the first render: an old card from before you joined shouldn't pop up
+function showPlay(){
+  const lp=s&&s.lastPlay;
+  if(seenPlay===undefined){seenPlay=lp?lp.id:"";return;}
+  if(!lp||lp.id===seenPlay)return;
+  seenPlay=lp.id;
+  const C=CARDS[lp.card];if(!C)return;
+  const who=lp.by===uid?L("You"):esc(nm(lp.by)),tgt=lp.target?(lp.target===uid?L("you"):esc(nm(lp.target))):"";
+  const d=document.createElement("div");d.className="playtoast";d.style.setProperty("--c",C.c);
+  d.innerHTML=`<div class="pt-card"><span>${C.ic}</span></div><div class="pt-text"><b>${who}</b> ${L("played")} <b>${esc(L(C.name))}</b>${lp.joker?" 🃏":""}${tgt?` → <b>${tgt}</b>`:""}<div class="pt-d">${esc(L(C.d))}</div></div>`;
+  document.body.appendChild(d);setTimeout(()=>d.classList.add("out"),2600);setTimeout(()=>d.remove(),3000);
+  sfx("card",FXC[C.c]||"grey");
+  if(lp.target===uid)try{navigator.vibrate&&navigator.vibrate(150);}catch(e){}
 }
 function spawnReacts(){
   const list=(s&&s.reactions)||[];
@@ -871,6 +925,7 @@ document.addEventListener("keydown",e=>{
 });
 document.addEventListener("pointerdown",()=>{if(SFX.on)actx();},{passive:true});
 document.addEventListener("click",async e=>{
+  if(e.target.classList&&e.target.classList.contains("sheet-bg")){sheet=null;render();return;}
   const t=e.target.closest("button");if(!t)return;
   const act=t.dataset.act;
   if(act==="lang"){devLang=t.dataset.v;ls.set("td_lang",devLang);render();return;}
@@ -883,6 +938,11 @@ document.addEventListener("click",async e=>{
     if(act==="join"&&!typedName())return;
     inviteCode=null;openRoom(c,act==="tv"?"screen":"player");return;
   }
+  if(t.dataset.card){sheet={card:t.dataset.card};render();return;}
+  if(act==="sheet-close"){sheet=null;render();return;}
+  if(t.dataset.as&&sheet){sheet.as=t.dataset.as;if(CARDS[sheet.as].k!=="target"){send("play",{card:sheet.card,as:sheet.as});sheet=null;}render();return;}
+  if(t.dataset.target&&sheet){send("play",{card:sheet.card,as:sheet.as||null,target:t.dataset.target});sheet=null;render();return;}
+  if(t.dataset.play&&sheet){send("play",{card:sheet.card,as:sheet.as||null});sheet=null;render();return;}
   if(act==="rename"){editingName=true;render();const el=document.getElementById("rname");if(el){el.focus();el.select();}return;}
   if(act==="rename-save"){const el=document.getElementById("rname");const v=(el&&el.value.trim()||"").slice(0,16);
     if(!v){toast(L("Enter your name first"));return;}ls.set("td_name",v);editingName=false;send("rename",v);render();return;}
