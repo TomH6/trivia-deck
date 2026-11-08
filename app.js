@@ -8,26 +8,26 @@ import { firebaseConfig } from "./config.js?v=8";
 import { BEATLES } from "./packs/beatles.js?v=8";
 import { TOLKIEN } from "./packs/tolkien.js?v=8";
 import { HE_MUSIC, HE_TV, HE_GEO, HE_GENERAL } from "./packs/hebrew.js?v=8";
-import { HE } from "./i18n.js?v=24";
+import { HE } from "./i18n.js?v=27";
 
 // ---------------- Cards ----------------
 const CARDS={
- // k: who a card affects — self, target (pick a player), all (everyone answers next), joker. n: how common it is in the draw pile.
- plain:{name:"Answer",ic:"❓",c:"var(--grey)",d:"Answer one question.",n:0,k:"none"},
- fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Remove two wrong answers from your question.",n:3,k:"self"},
- shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Blocks the next life you would lose.",n:3,k:"self"},
- cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"Choose the category of your next question.",n:2,k:"self"},
- hard:{name:"Hard Mode",ic:"🔥",c:"var(--yellow)",d:"Your next question is hard. Get it right to win back a life.",n:2,k:"self"},
- skip:{name:"Skip",ic:"⏭️",c:"var(--blue)",d:"Skip your next turn.",n:1,k:"self"},
- bomb:{name:"Pass the Bomb",ic:"💣",c:"var(--red)",d:"Pass your question to another player.",n:3,k:"target"},
- double:{name:"Double Trouble",ic:"✌️",c:"var(--yellow)",d:"Pick a player: their next turn is 2 questions.",n:2,k:"target"},
- speed:{name:"Speed Round",ic:"⚡",c:"var(--yellow)",d:"Pick a player: only 7 seconds on their next question.",n:2,k:"target"},
- curse:{name:"Curse",ic:"🧿",c:"var(--red)",d:"Pick a player: their next question is harder.",n:2,k:"target"},
- buzzer:{name:"Buzzer Round",ic:"🔔",c:"var(--purple)",d:"Everyone answers next. Fastest right answer wins back a life.",n:2,k:"all"},
- sudden:{name:"Sudden Death",ic:"💀",c:"var(--red)",d:"Everyone answers next. Wrong = lose a life.",n:1,k:"all"},
- joker:{name:"Joker",ic:"🃏",c:"var(--purple)",d:"Becomes any card you want.",n:1,k:"joker"},
+ // g: helper (for yourself) or attack (on an opponent). k: self / target / all / joker. n: how common in the draw pile.
+ plain:{name:"Answer",ic:"❓",c:"var(--grey)",d:"Answer one question.",n:0,k:"none",g:"none"},
+ fifty:{name:"50/50",ic:"✂️",c:"var(--green)",d:"Your question has only 2 answers to choose from.",n:3,k:"self",g:"help"},
+ shield:{name:"Shield",ic:"🛡️",c:"var(--green)",d:"Blocks the next life you would lose.",n:3,k:"self",g:"help"},
+ cat:{name:"Category Pick",ic:"🎯",c:"var(--green)",d:"You choose the category of your question.",n:2,k:"self",g:"help"},
+ hard:{name:"Hard Mode",ic:"🔥",c:"var(--green)",d:"Your question is hard. Get it right to win back a life.",n:2,k:"self",g:"help"},
+ skip:{name:"Skip",ic:"⏭️",c:"var(--green)",d:"Skip your question (or your next one).",n:1,k:"self",g:"help"},
+ buzzer:{name:"Buzzer Round",ic:"🔔",c:"var(--green)",d:"After this turn everyone answers. Fastest right answer wins back a life.",n:2,k:"all",g:"help"},
+ bomb:{name:"Pass the Bomb",ic:"💣",c:"var(--red)",d:"Your question goes to a player you pick.",n:3,k:"target",g:"attack"},
+ double:{name:"Double Trouble",ic:"✌️",c:"var(--red)",d:"Pick a player: their next turn is 2 questions.",n:2,k:"target",g:"attack"},
+ speed:{name:"Speed Round",ic:"⚡",c:"var(--red)",d:"Pick a player: only 7 seconds on their next question.",n:2,k:"target",g:"attack"},
+ curse:{name:"Curse",ic:"🧿",c:"var(--red)",d:"Pick a player: their next question is harder.",n:2,k:"target",g:"attack"},
+ sudden:{name:"Sudden Death",ic:"💀",c:"var(--red)",d:"After this turn everyone answers. Wrong = lose a life.",n:1,k:"all",g:"attack"},
+ joker:{name:"Joker",ic:"🃏",c:"var(--purple)",d:"Becomes any card you want.",n:1,k:"joker",g:"wild"},
 };
-const START_HAND=2,HAND_MAX=3;
+const START_HAND=2,HAND_MAX=3,CARD_TIME=12;
 const FX_ICON={fifty:"✂️",cat:"🎯",hard:"🔥",skip:"⏭️",bomb:"💣",double:"✌️",speed:"⚡"};
 const EMOJI=["😂","😱","🔥","👏","😈","💀"];
 const LETTERS="ABCD";
@@ -150,7 +150,7 @@ function normalize(x){
   if(!x)return x;
   x.players=arr(x.players).map(p=>Object.assign({lives:0,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0},p));
   for(const k of ["log","reactions","deck","who","queue","ghostWho"])x[k]=arr(x[k]);
-  for(const k of ["answers","cursed","ghostAns","fx","played"])x[k]=x[k]||{};
+  for(const k of ["answers","cursed","ghostAns","fx","played","ready"])x[k]=x[k]||{};
   x.hands=Object.fromEntries(Object.entries(x.hands||{}).map(([k,v])=>[k,arr(v)]));
   x.pendingAll=arr(x.pendingAll);
   if(x.q)x.q.cut=arr(x.q.cut);
@@ -319,6 +319,7 @@ function handle(inp){
     return;
   }
   if(kind==="play"){playCard(P,v);return;}
+
   if(kind==="pick"){if(s.chooser===id)choose(v);}
   if(kind==="haunt"){
     const T=pl(v);if(!P.ghost||!(P.haunts>0)||!T||T.ghost)return;
@@ -330,30 +331,40 @@ function handle(inp){
 function playCard(P,v){
   if(!v||P.ghost)return;
   const hand=s.hands[P.id]||[],idx=hand.indexOf(v.card);if(idx<0)return;
-  if(s.played[P.id]===s.turn)return;
+  if(s.phase!=="cards"||P.id!==curId()||s.played[P.id]===s.turn)return;
   let type=v.card;const joker=type==="joker";
   if(joker){if(!CARDS[v.as]||["joker","plain"].includes(v.as))return;type=v.as;}
   const C=CARDS[type];let target=null;
   if(C.k==="target"){target=v.target;const T=pl(target);if(!T||T.ghost||T.id===P.id)return;}
-  // is it this player's question right now (and not answered yet)?
-  const live=s.phase==="question"&&s.mode==="single"&&s.who[0]===P.id&&!s.answers[P.id];
   let now_=false;
   switch(type){
-    case "fifty":if(live&&!(s.q.cut||[]).length&&s.q.opts.length>2){s.q.cut=sample(s.q.opts.map((o,i)=>i).filter(i=>i!==s.q.correct),2);now_=true;}else fx(P.id).fifty=true;break;
+    case "fifty":fx(P.id).fifty=true;break;
     case "shield":P.shields++;now_=true;break;
     case "cat":fx(P.id).cat=true;break;
     case "hard":fx(P.id).hard=true;break;
     case "skip":fx(P.id).skip=true;break;
-    case "bomb":if(live){s.who=[target];s.answers={};s.until=now()+s.dur*1000+600;now_=true;}else fx(P.id).bomb=target;break;
+    case "bomb":fx(P.id).bomb=target;break;
     case "double":fx(target).double=true;break;
     case "speed":fx(target).speed=true;break;
     case "curse":s.cursed[target]=true;break;
     case "buzzer":case "sudden":s.pendingAll.push(type);break;
   }
-  hand.splice(idx,1);s.hands[P.id]=hand;s.played[P.id]=s.turn;
+  hand.splice(idx,1);s.hands[P.id]=hand;s.played[P.id]=s.turn;s.ready[P.id]=true;
   s.lastPlay={id:Math.random().toString(36).slice(2,9),by:P.id,card:type,target,joker,now:now_};
   log(target?L("{0} played {1} on {2}",P.name,C.ic+" "+L(C.name),nm(target)):L("{0} played {1}",P.name,C.ic+" "+L(C.name)));
+  if(cardTimeDone())return beginQuestion();
   save();
+}
+// card time ends as soon as the turn player has played their card
+function cardTimeDone(){return s.played[curId()]===s.turn;}
+// time ran out: play a random card from the turn player's hand for them
+function autoPlay(){
+  const me=curId(),h=s.hands[me]||[];if(!h.length)return beginQuestion();
+  const card=rand(h);const as=card==="joker"?rand(Object.keys(CARDS).filter(k=>!["joker","plain"].includes(k))):null;
+  const type=as||card,others=alive().filter(p=>p.id!==me);
+  log(L("⏰ Time's up — a random card was played for {0}",nm(me)));
+  playCard(pl(me),{card,as,target:CARDS[type].k==="target"&&others.length?rand(others).id:null});
+  if(s.phase==="cards")beginQuestion();
 }
 
 async function hostStart(){
@@ -362,7 +373,7 @@ async function hostStart(){
   await preparePool(s.settings.cats);
   const LV=s.settings.lives==="auto"?(n>=5?2:3):Number(s.settings.lives);
   Object.assign(s,{status:"playing",maxLives:LV,deck:buildDeck(),dir:1,cur:Math.floor(Math.random()*n),turn:0,qn:0,roundCount:0,
-    hands:{},fx:{},played:{},pendingAll:[],lastPlay:null,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
+    hands:{},fx:{},played:{},ready:{},pendingAll:[],lastPlay:null,cursed:{},safeLeft:0,extraSkip:0,winner:null,log:[L("Game on! {0} lives each.",LV)]});
   s.players.forEach(p=>Object.assign(p,{lives:LV,shields:0,ghost:false,gp:0,haunts:0,right:0,asked:0}));
   deal(START_HAND);
   startTurn();
@@ -373,7 +384,14 @@ function startTurn(){
   s.turn++;s.roundCount=(s.roundCount||0)+1;
   if(s.roundCount>alive().length){s.roundCount=1;deal(1);log(L("🃏 New round — everyone draws a card"));}
   const me=curId(),f=s.fx[me]||{};
-  Object.assign(s,{card:{type:"plain"},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null});
+  Object.assign(s,{card:{type:"plain"},queue:[],chain:null,chainFail:false,result:null,q:null,who:[],answers:{},chooser:null,options:null,info:null,ready:{}});
+  if(f.skip){delete f.skip;s.card={type:"skip"};Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3,until:now()+3000});return save();}
+  // card time: everyone may play one card before the question appears
+  if((s.hands[me]||[]).length){Object.assign(s,{phase:"cards",dur:CARD_TIME,until:now()+CARD_TIME*1000});return save();}
+  beginQuestion();
+}
+function beginQuestion(){
+  const me=curId(),f=s.fx[me]||{};
   if(f.skip){delete f.skip;s.card={type:"skip"};Object.assign(s,{phase:"info",info:L("{0}'s turn is skipped ⏭️",nm(me)),dur:3,until:now()+3000});return save();}
   if(f.bomb){const t=f.bomb;delete f.bomb;if(pl(t)&&!pl(t).ghost){s.card={type:"bomb"};log(L("{0} passes the bomb to {1} 💣",nm(me),nm(t)));return ask({who:[t],diff:rd()});}}
   if(f.cat){delete f.cat;s.card={type:"cat"};const cats=poolCats();
@@ -468,6 +486,7 @@ function tick(){
   if(s.phase==="question")resolve();
   else if(s.phase==="reveal")afterReveal();
   else if(s.phase==="pickcat")choose(null);
+  else if(s.phase==="cards")autoPlay();
   else if(s.phase==="info")endTurn();
 }
 
@@ -531,6 +550,7 @@ function soundsFor(S){
     sfx("deal");setTimeout(()=>sfx("flip"),560);setTimeout(()=>sfx("card",fx),1150);
     if(curId()===uid){setTimeout(()=>sfx("turn"),1700);try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}}
   }
+  if(S.phase==="cards"&&P.phase!=="cards"&&curId()===uid)sfx("flip");
   if(S.status==="playing"&&P.turn!==S.turn&&curId()===uid&&S.phase!=="info"){
     sfx("turn");try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch(e){}
   }
@@ -663,7 +683,13 @@ function playArea(tv){
   const party=s.settings.party&&!tv&&tvConnected();
   let h="";
   const ph=s.phase,cur=curId();
-  if(ph==="card"){
+  if(ph==="cards"){
+    const mine=!tv&&cur===uid&&s.played[uid]!==s.turn;
+    h+=`<div class="cardtime"><div class="ct-title">${cur===uid?L("🃏 Your turn — play a card"):L("🃏 {0} is choosing a card…",esc(nm(cur)))}</div>
+      <div class="ct-sub">${cur===uid?L("Pick one card before your question. If time runs out, a random one is played."):L("Their question comes right after.")}</div>
+      ${cardbar()}</div>`;
+    if(mine)h+=bigHand(s.hands[uid]||[]);
+  }else if(ph==="card"){
     h+=`<div class="status">${cur===uid?L("Your turn — you drew…"):L("{0} drew…",esc(nm(cur)))}</div><div class="stage stage-ph"></div>`;
   }else if(ph==="info"){
     h+=`<div class="stage">${cardHTML(s.card.type,false)}</div><div class="result">${esc(s.info)}</div>${cardbar()}`;
@@ -715,14 +741,20 @@ function playArea(tv){
 
 // ---- the hand of cards (phones) ----
 let sheet=null; // {card, as} while the player is choosing how to play a card
-function canPlayNow(){const me=pl(uid);return !!me&&!me.ghost&&s.status==="playing"&&s.played[uid]!==s.turn;}
+function canPlayNow(){const me=pl(uid);return !!me&&!me.ghost&&s.status==="playing"&&s.phase==="cards"&&curId()===uid&&s.played[uid]!==s.turn;}
 function handBar(){
-  const me=pl(uid);if(!me||me.ghost||s.status!=="playing")return "";
-  const hand=s.hands[uid]||[],ok=canPlayNow();
-  return `<div class="hand">
-    <div class="hand-label">${hand.length?(ok?L("Your cards — tap to play"):L("You played a card this turn")):L("No cards — you draw one each round")}</div>
-    <div class="hand-cards">${hand.map(t=>{const C=CARDS[t];return `<button class="hcard" data-card="${t}" style="--c:${C.c}" ${ok?"":"disabled"}><span class="hi">${C.ic}</span><span class="hn">${esc(L(C.name))}</span></button>`;}).join("")}</div>
+  const me=pl(uid);if(!me||me.ghost||s.status!=="playing"||(s.phase==="cards"&&curId()===uid))return "";
+  const hand=s.hands[uid]||[];
+  return `<div class="hand view">
+    <div class="hand-label">${hand.length?L("Your cards — you play one at the start of your turn"):L("No cards — you draw one each round")}</div>
+    <div class="hand-cards">${hand.map(t=>{const C=CARDS[t];return `<div class="hcard g-${C.g}" style="--c:${C.c}"><span class="hi">${C.ic}</span><span class="hn">${esc(L(C.name))}</span></div>`;}).join("")}</div>
   </div>`;
+}
+function bigHand(hand){
+  const group=g=>hand.map((t,i)=>({t,i})).filter(x=>CARDS[x.t].g===g||(g==="help"&&CARDS[x.t].g==="wild"));
+  const tile=({t})=>{const C=CARDS[t];return `<button class="bcard" data-card="${t}" style="--c:${C.c}"><span class="bi">${C.ic}</span><span class="bn">${esc(L(C.name))}</span><span class="bd">${esc(L(C.d))}</span></button>`;};
+  const sec=(g,title)=>{const cs=group(g);return cs.length?`<div class="hgroup ${g}"><div class="hg-title">${title}</div><div class="hg-cards">${cs.map(tile).join("")}</div></div>`:"";};
+  return `<div class="bighand">${sec("help",L("🛡️ Helpers — for you"))}${sec("attack",L("⚔️ Attacks — on an opponent"))}</div>`;
 }
 function sheetView(){
   if(!sheet||!s||s.status!=="playing"||!canPlayNow()||!(s.hands[uid]||[]).includes(sheet.card)){sheet=null;return "";}
@@ -816,7 +848,7 @@ function bigScreenBox(){
 }
 function rulesBox(){
   return `<details class="box rules"><summary>${L("How to play & the cards")}</summary>
-  <p class="mute small">${L("Everyone starts with 2 cards and draws one more after each full round (up to 3). Play a card whenever you like — one per turn — to help yourself, hit another player, or make everyone answer. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins.")}</p>
+  <p class="mute small">${L("Everyone starts with 2 cards and draws one more after each full round (up to 3). At the start of your turn you play one card: a helper for yourself or an attack on an opponent. Then your question comes. Get a question wrong and you lose a life. Lose them all and you're a ghost 👻 — ghosts keep guessing, and every 3 right guesses lets them haunt a living player. Last one standing wins.")}</p>
   <table>${Object.values(CARDS).filter(c=>c.n>0).map(c=>`<tr><td>${c.ic}</td><td><b>${esc(L(c.name))}</b><br><span class="mute">${esc(L(c.d))}</span></td></tr>`).join("")}</table>
   <p class="mute small">Questions from the <a href="https://opentdb.com" style="color:inherit">Open Trivia Database</a> (CC BY-SA 4.0).</p></details>`;
 }
@@ -899,11 +931,11 @@ function spawnReacts(){
 }
 function updateTimer(){
   const V=isHost&&shown?shown:s;
-  if(V&&V.until&&(V.phase==="card"||V.phase==="info")){
+  if(V&&V.until&&(V.phase==="card"||V.phase==="info"||V.phase==="cards")){
     const total=(V.dur||5)*1000,left=Math.min(total,Math.max(0,V.until-now())),sec=Math.ceil(left/1000);
     document.querySelectorAll(".cardbar").forEach(cb=>{
       const i=cb.querySelector("i");if(i)i.style.width=(100*left/total)+"%";
-      const lb=cb.querySelector(".cb-label"),t=L("Next up in {0}",sec);if(lb&&lb.textContent!==t)lb.textContent=t;
+      const lb=cb.querySelector(".cb-label"),t=V.phase==="cards"?L("{0} seconds to choose",sec):L("Next up in {0}",sec);if(lb&&lb.textContent!==t)lb.textContent=t;
       cb.classList.toggle("low",sec<=2);
     });
   }
@@ -939,6 +971,7 @@ document.addEventListener("click",async e=>{
     inviteCode=null;openRoom(c,act==="tv"?"screen":"player");return;
   }
   if(t.dataset.card){sheet={card:t.dataset.card};render();return;}
+
   if(act==="sheet-close"){sheet=null;render();return;}
   if(t.dataset.as&&sheet){sheet.as=t.dataset.as;if(CARDS[sheet.as].k!=="target"){send("play",{card:sheet.card,as:sheet.as});sheet=null;}render();return;}
   if(t.dataset.target&&sheet){send("play",{card:sheet.card,as:sheet.as||null,target:t.dataset.target});sheet=null;render();return;}

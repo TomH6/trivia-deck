@@ -457,3 +457,34 @@ body.tv .pl .cx{font-size:2vh}
 .hcard .hi{width:34px;height:34px;font-size:21px}
 .hcard .hn{font-size:10.5px}
 #app{padding-bottom:170px}
+
+/* ===== card time ===== */
+.cardtime{text-align:center;margin:8px 0 6px;padding:12px;border-radius:18px;background:linear-gradient(180deg,#2b2160,#1b1c38);border:1px solid rgba(166,107,255,.45)}
+.ct-title{font-family:'Fredoka',sans-serif;font-size:24px;font-weight:700}
+.ct-sub{color:#d6d2f5;font-size:15px;margin-top:2px}
+.cardtime .cardbar{margin-top:10px}
+.cardtime .cb-track i{background:var(--purple)}
+.ct-ready{display:flex;justify-content:center;gap:6px;margin-top:10px}
+.ct-ready .rd{opacity:.35;transition:opacity .2s;position:relative}
+.ct-ready .rd.ok{opacity:1}
+.ct-ready .rd.ok::after{content:"✓";position:absolute;right:-4px;bottom:-4px;background:var(--green);color:#0b2a17;border-radius:50%;width:15px;height:15px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.bighand{display:grid;gap:10px;margin-top:6px}
+.hgroup{border-radius:16px;padding:10px;background:var(--panel)}
+.hgroup.help{border:2px solid rgba(46,204,113,.5)}
+.hgroup.attack{border:2px solid rgba(255,90,95,.55)}
+.hg-title{font-weight:700;font-size:14px;margin-bottom:8px;text-align:start}
+.hgroup.help .hg-title{color:#7ff0a8}.hgroup.attack .hg-title{color:#ff9a9d}
+.hg-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.bcard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:14px;border:3px solid #fff;color:#fff;background:radial-gradient(circle at 30% 15%,rgba(255,255,255,.35),transparent 55%),var(--c);box-shadow:0 6px 16px rgba(0,0,0,.4);animation:handin .35s ease-out both;font-family:'Rubik',sans-serif;min-height:138px}
+.bcard:active{transform:scale(.96)}
+.bcard .bi{font-size:30px;background:#fff;border-radius:50%;width:50px;height:50px;display:flex;align-items:center;justify-content:center}
+.bcard .bn{font-family:'Fredoka',sans-serif;font-weight:700;font-size:15px;line-height:1.1;text-shadow:0 1px 0 rgba(0,0,0,.3)}
+.bcard .bd{font-size:11px;line-height:1.25;opacity:.95}
+.ct-pass{margin-top:10px}
+/* view-only strip */
+.hand.view .hcard{cursor:default}
+.hcard.g-help{box-shadow:0 0 0 2px rgba(46,204,113,.6),0 6px 14px rgba(0,0,0,.4)}
+.hcard.g-attack{box-shadow:0 0 0 2px rgba(255,90,95,.6),0 6px 14px rgba(0,0,0,.4)}
+body.tv .cardtime{padding:3vh}
+body.tv .ct-title{font-size:6vh}body.tv .ct-sub{font-size:3vh}
+body.tv .ct-ready .av{width:7vh;height:7vh;font-size:3.4vh}
